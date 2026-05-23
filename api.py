@@ -7,6 +7,12 @@ from buscar_contexto import buscar_contexto
 import json
 
 app = FastAPI()
+
+@app.get("/ping")
+@app.head("/ping")
+def ping():
+    return {"status": "ok"}
+
 SHEET_ID = "1j2iRn67xxU6BIs3hu8qnw7qO98mgGWuRsGiBp4tyf5U"
 
 class PreguntaRequest(BaseModel):
