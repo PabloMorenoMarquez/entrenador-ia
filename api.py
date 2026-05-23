@@ -4,54 +4,45 @@ from conectar_sheets import conectar, leer_hoja
 from analizar_entrenamiento import obtener_ejercicios, obtener_sesiones
 from motor_decision import generar_informe
 from buscar_contexto import buscar_contexto
+from supabase import create_client
 import json
+import os
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
+SHEET_ID = "1j2iRn67xxU6BIs3hu8qnw7qO98mgGWuRsGiBp4tyf5U"
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+class PreguntaRequest(BaseModel):
+    pregunta: str
 
 @app.get("/ping")
 @app.head("/ping")
 def ping():
     return {"status": "ok"}
 
-SHEET_ID = "1j2iRn67xxU6BIs3hu8qnw7qO98mgGWuRsGiBp4tyf5U"
-
-class PreguntaRequest(BaseModel):
-    pregunta: str
-
 @app.get("/motor")
 def motor():
-    """
-    Lee tus datos reales de Sheets y devuelve
-    el informe del motor de decisión.
-    Make llama a este endpoint antes de llamar al coach.
-    """
     cliente = conectar()
     ejercicios = obtener_ejercicios(cliente)
     sesiones = obtener_sesiones(cliente)
-
     if not ejercicios:
         return {"resumen": "Sin datos de entrenamiento registrados aún."}
-
     informe = generar_informe(ejercicios, sesiones)
     return informe
 
 @app.post("/rag")
 def rag(request: PreguntaRequest):
-    """
-    Recibe la pregunta del usuario y devuelve
-    los chunks relevantes de los libros.
-    Make llama a este endpoint para obtener
-    el contexto científico antes de llamar al coach.
-    """
     contexto = buscar_contexto(request.pregunta)
     return {"contexto": contexto}
 
 @app.post("/analisis-completo")
 def analisis_completo(request: PreguntaRequest):
-    """
-    Endpoint principal — une motor de decisión + RAG
-    en una sola llamada. Make solo necesita llamar aquí.
-    """
+    inicio = time.time()
+
     # Motor de decisión
     cliente = conectar()
     ejercicios = obtener_ejercicios(cliente)
@@ -59,14 +50,31 @@ def analisis_completo(request: PreguntaRequest):
 
     if ejercicios:
         informe_motor = generar_informe(ejercicios, sesiones)
-        motor_texto = json.dumps(informe_motor, ensure_ascii=False)
+        motor_texto = informe_motor
     else:
+        informe_motor = None
         motor_texto = "Sin datos de entrenamiento registrados aún."
 
     # RAG
     contexto_rag = buscar_contexto(request.pregunta)
+    chunks = [c for c in contexto_rag.split("[Fuente:") if c.strip()]
+
+    # Duración
+    duracion_ms = int((time.time() - inicio) * 1000)
+
+    # Guardar log en Supabase
+    try:
+        supabase.table("logs").insert({
+            "pregunta": request.pregunta,
+            "motor_decision": informe_motor,
+            "contexto_rag": contexto_rag,
+            "chunks_encontrados": len(chunks),
+            "duracion_ms": duracion_ms
+        }).execute()
+    except Exception as e:
+        print(f"Error guardando log: {e}")
 
     return {
-        "motor_decision": motor_texto,
+        "motor_decision": json.dumps(motor_texto, ensure_ascii=False) if isinstance(motor_texto, dict) else motor_texto,
         "contexto_cientifico": contexto_rag
     }
