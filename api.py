@@ -16,8 +16,27 @@ app = FastAPI()
 SHEET_ID = "1j2iRn67xxU6BIs3hu8qnw7qO98mgGWuRsGiBp4tyf5U"
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
+# Caché de datos de Sheets
+_cache = {
+    "ejercicios": None,
+    "sesiones": None,
+    "ultimo_update": 0
+}
+CACHE_TTL = 300  # 5 minutos
+
 class PreguntaRequest(BaseModel):
     pregunta: str
+
+def obtener_datos_sheets():
+    """Lee Sheets solo si han pasado más de 5 minutos desde la última lectura."""
+    ahora = time.time()
+    if ahora - _cache["ultimo_update"] > CACHE_TTL or _cache["ejercicios"] is None:
+        print("Actualizando caché de Sheets...")
+        cliente = conectar()
+        _cache["ejercicios"] = obtener_ejercicios(cliente)
+        _cache["sesiones"] = obtener_sesiones(cliente)
+        _cache["ultimo_update"] = ahora
+    return _cache["ejercicios"], _cache["sesiones"]
 
 @app.get("/ping")
 @app.head("/ping")
@@ -26,9 +45,7 @@ def ping():
 
 @app.get("/motor")
 def motor():
-    cliente = conectar()
-    ejercicios = obtener_ejercicios(cliente)
-    sesiones = obtener_sesiones(cliente)
+    ejercicios, sesiones = obtener_datos_sheets()
     if not ejercicios:
         return {"resumen": "Sin datos de entrenamiento registrados aún."}
     informe = generar_informe(ejercicios, sesiones)
@@ -43,10 +60,8 @@ def rag(request: PreguntaRequest):
 def analisis_completo(request: PreguntaRequest):
     inicio = time.time()
 
-    # Motor de decisión
-    cliente = conectar()
-    ejercicios = obtener_ejercicios(cliente)
-    sesiones = obtener_sesiones(cliente)
+    # Motor de decisión con caché
+    ejercicios, sesiones = obtener_datos_sheets()
 
     if ejercicios:
         informe_motor = generar_informe(ejercicios, sesiones)
@@ -62,7 +77,7 @@ def analisis_completo(request: PreguntaRequest):
     # Duración
     duracion_ms = int((time.time() - inicio) * 1000)
 
-    # Guardar log en Supabase
+    # Log
     try:
         supabase.table("logs").insert({
             "pregunta": request.pregunta,
