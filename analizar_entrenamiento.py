@@ -26,7 +26,8 @@ def obtener_ejercicios(cliente):
             "series": int(fila.get("SERIES", 0) or 0),
             "reps_realizadas": int(fila.get("REPS_REALIZADAS", 0) or 0),
             "peso": float(fila.get("PESO_KG", 0) or 0),
-            "rir": int(fila.get("RIR", 2) or 2)
+            "rir": int(fila.get("RIR", 2) or 2),
+            "grupo_muscular": fila.get("GRUPO_MUSCULAR", "desconocido")
         })
     
     return ejercicios

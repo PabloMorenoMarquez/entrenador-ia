@@ -172,6 +172,8 @@ def generar_informe(ejercicios_data, sesiones_data, objetivo=OBJETIVO):
         "objetivo": objetivo,
         "ejercicios": {},
         "alertas_sesion": [],
+        "alertas_volumen": [],
+        "volumen_semanal": {},
         "resumen": []
     }
 
@@ -191,9 +193,80 @@ def generar_informe(ejercicios_data, sesiones_data, objetivo=OBJETIVO):
             sesion["duracion_min"]
         )
         informe["alertas_sesion"].extend(alertas)
+    
+    volumen = analizar_volumen_semanal(ejercicios_data)
+    informe["volumen_semanal"] = volumen["volumen_semanal"]
+    informe["alertas_volumen"] = volumen["alertas_volumen"]
+    informe["resumen"].extend(volumen["alertas_volumen"])
 
     return informe
 
+
+# Volumen óptimo semanal por grupo muscular para hipertrofia
+VOLUMEN_OPTIMO = {
+    "minimo": 10,
+    "maximo": 20,
+    "ideal": 15
+}
+
+def analizar_volumen_semanal(ejercicios_data):
+    """
+    Analiza el volumen total semanal por grupo muscular.
+    Detecta grupos por debajo del mínimo o por encima del máximo.
+    """
+    from datetime import datetime, timedelta
+
+    # Calcular inicio de semana actual (lunes)
+    hoy = datetime.now()
+    inicio_semana = hoy - timedelta(days=hoy.weekday())
+    inicio_semana = inicio_semana.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    volumen_por_grupo = {}
+
+    for ejercicio, historial in ejercicios_data.items():
+        for sesion in historial:
+            # Parsear fecha
+            try:
+                fecha = datetime.strptime(sesion["fecha"], "%Y-%m-%d")
+            except:
+                continue
+
+            # Solo sesiones de esta semana
+            if fecha < inicio_semana:
+                continue
+
+            grupo = sesion.get("grupo_muscular", "desconocido").strip().lower()
+            series = sesion.get("series", 0)
+
+            if grupo not in volumen_por_grupo:
+                volumen_por_grupo[grupo] = 0
+            volumen_por_grupo[grupo] += series
+
+    # Evaluar cada grupo
+    analisis = {}
+    alertas = []
+
+    for grupo, series_totales in volumen_por_grupo.items():
+        if series_totales < VOLUMEN_OPTIMO["minimo"]:
+            estado = "bajo"
+            alerta = f"{grupo}: {series_totales} series esta semana — por debajo del mínimo ({VOLUMEN_OPTIMO['minimo']})"
+            alertas.append(alerta)
+        elif series_totales > VOLUMEN_OPTIMO["maximo"]:
+            estado = "excesivo"
+            alerta = f"{grupo}: {series_totales} series esta semana — por encima del máximo ({VOLUMEN_OPTIMO['maximo']}), riesgo de fatiga"
+            alertas.append(alerta)
+        else:
+            estado = "optimo"
+
+        analisis[grupo] = {
+            "series_semana": series_totales,
+            "estado": estado
+        }
+
+    return {
+        "volumen_semanal": analisis,
+        "alertas_volumen": alertas
+    }
 
 # -----------------------------------------------
 # TEST con datos de ejemplo
