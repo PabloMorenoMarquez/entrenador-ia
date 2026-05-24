@@ -381,8 +381,83 @@ def generar_informe(ejercicios_data, sesiones_data, objetivo=OBJETIVO):
     informe["volumen_semanal"] = volumen["volumen_semanal"]
     informe["alertas_volumen"] = volumen["alertas_volumen"]
     informe["resumen"].extend(volumen["alertas_volumen"])
+    informe["estado_global"] = calcular_estado_global(informe)
 
     return informe
+
+# -----------------------------------------------
+# ESTADO GLOBAL DEL ATLETA
+# -----------------------------------------------
+
+def calcular_estado_global(informe):
+    """
+    Genera un score único 0-100 que resume
+    el estado completo del atleta combinando:
+    - Progresión de ejercicios (50%)
+    - Energía y esfuerzo en sesiones (30%)
+    - Consistencia semanal de volumen (20%)
+    """
+
+    # --- 1. SCORE DE ENTRENAMIENTO (50%) ---
+    scores_globales = [
+        datos["score_global"]
+        for datos in informe["ejercicios"].values()
+        if datos["estado"] != "sin_datos"
+    ]
+    score_entrenamiento = sum(scores_globales) / len(scores_globales) if scores_globales else 50
+
+    # --- 2. SCORE DE ENERGÍA/ESFUERZO (30%) ---
+    # Penalizar energía baja y esfuerzo excesivo
+    num_alertas_sesion = len(informe["alertas_sesion"])
+    score_energia = max(0, 100 - (num_alertas_sesion * 25))
+
+    # --- 3. SCORE DE CONSISTENCIA SEMANAL (20%) ---
+    grupos_optimos = sum(
+        1 for datos in informe["volumen_semanal"].values()
+        if datos["estado"] == "optimo"
+    )
+    grupos_totales = len(informe["volumen_semanal"])
+
+    if grupos_totales > 0:
+        score_consistencia = (grupos_optimos / grupos_totales) * 100
+    else:
+        score_consistencia = 50  # Sin datos, neutro
+
+    # --- SCORE FINAL PONDERADO ---
+    score_final = (
+        score_entrenamiento * 0.5 +
+        score_energia * 0.3 +
+        score_consistencia * 0.2
+    )
+    score_final = max(0, min(100, round(score_final)))
+
+    # --- INTERPRETACIÓN ---
+    if score_final >= 80:
+        estado = "óptimo"
+        mensaje = "Entrenando bien, progresando y sin señales de fatiga."
+    elif score_final >= 60:
+        estado = "bueno"
+        mensaje = "Buen estado general con algunos puntos a mejorar."
+    elif score_final >= 40:
+        estado = "moderado"
+        mensaje = "Estado aceptable pero hay señales que requieren atención."
+    elif score_final >= 20:
+        estado = "bajo"
+        mensaje = "Señales claras de fatiga o estancamiento. Revisar plan."
+    else:
+        estado = "crítico"
+        mensaje = "Estado crítico. Considerar deload o descanso completo."
+
+    return {
+        "score_global": score_final,
+        "estado": estado,
+        "mensaje": mensaje,
+        "desglose": {
+            "entrenamiento": round(score_entrenamiento),
+            "energia": round(score_energia),
+            "consistencia": round(score_consistencia)
+        }
+    }
 
 # -----------------------------------------------
 # TEST
@@ -414,5 +489,10 @@ if __name__ == "__main__":
 
     informe = generar_informe(ejercicios_ejemplo, sesiones_ejemplo)
     print(generar_texto_coach(informe))
+    print("\n--- ESTADO GLOBAL ---")
+    estado = informe["estado_global"]
+    print(f"Score: {estado['score_global']}/100 — {estado['estado'].upper()}")
+    print(f"Mensaje: {estado['mensaje']}")
+    print(f"Desglose: Entrenamiento {estado['desglose']['entrenamiento']} | Energía {estado['desglose']['energia']} | Consistencia {estado['desglose']['consistencia']}")
     print("\n--- JSON COMPLETO ---")
     print(json.dumps(informe, ensure_ascii=False, indent=2))

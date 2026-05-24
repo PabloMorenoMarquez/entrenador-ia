@@ -127,6 +127,30 @@ def run_tests():
         resultado = analizar_ejercicio(ejercicio, historial)
         test(f"Score global 0-100 en {resultado['estado']}",
              0 <= resultado["score_global"] <= 100, True)
+        
+    
+    # --- TEST 19: Estado global existe en informe ---
+    ejercicios_test = {
+        "Press de banca": [
+            {"fecha": "2025-01-01", "series": 4, "reps_realizadas": 8, "peso": 70, "rir": 2, "grupo_muscular": "pecho"},
+            {"fecha": "2025-01-08", "series": 4, "reps_realizadas": 8, "peso": 72, "rir": 2, "grupo_muscular": "pecho"},
+        ]
+    }
+    sesiones_test = [{"nivel_energia": 4, "nivel_esfuerzo": 7, "duracion_min": 60}]
+    informe = generar_informe(ejercicios_test, sesiones_test)
+    test("Estado global presente en informe", "estado_global" in informe, True)
+
+    # --- TEST 20: Score global entre 0 y 100 ---
+    test("Score global entre 0 y 100",
+         0 <= informe["estado_global"]["score_global"] <= 100, True)
+
+    # --- TEST 21: Sesión perfecta mejor que sesión mala ---
+    sesiones_perfectas = [{"nivel_energia": 5, "nivel_esfuerzo": 7, "duracion_min": 60}]
+    sesiones_malas = [{"nivel_energia": 1, "nivel_esfuerzo": 10, "duracion_min": 100}]
+    informe_bueno = generar_informe(ejercicios_test, sesiones_perfectas)
+    informe_malo = generar_informe(ejercicios_test, sesiones_malas)
+    test("Sesión perfecta → mejor score global que sesión mala",
+         informe_bueno["estado_global"]["score_global"] > informe_malo["estado_global"]["score_global"], True)
 
     print("\n=== FIN DE TESTS ===")
 
