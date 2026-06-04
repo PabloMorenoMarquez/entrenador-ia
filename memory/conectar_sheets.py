@@ -18,6 +18,8 @@ SCOPES = [
 SHEET_ID = os.environ.get("SHEET_ID", "1j2iRn67xxU6BIs3hu8qnw7qO98mgGWuRsGiBp4tyf5U")
 
 # Mapeo: nombre lógico de sheet → nombre real en Google Sheets
+MAX_MEMORIA_PROMPT = 15  # máximo de entradas de memoria inyectadas al prompt
+
 NOMBRE_HOJAS = {
     "perfil_usuario":    "perfil_usuario",
     "dias_tipicos":      "dias_tipicos",
@@ -125,7 +127,7 @@ def _leer_sheets_sync(nombres: list[str]) -> dict:
         if nombre == "memory":
             activas = [f for f in filas if str(f.get("ACTIVA", "")).upper() in ("TRUE", "1", "VERDADERO", "SI", "SÍ")]
             activas_ordenadas = sorted(activas, key=lambda x: int(x.get("PRIORIDAD", 0) or 0), reverse=True)
-            resultado[nombre] = _hojas_a_texto(activas_ordenadas)
+            resultado[nombre] = _hojas_a_texto(activas_ordenadas[:MAX_MEMORIA_PROMPT])
         else:
             resultado[nombre] = _hojas_a_texto(filas)
 
@@ -265,6 +267,69 @@ def _guardar_entreno_sync(datos: dict) -> str:
         ])
 
     return sesion_id
+
+
+def _decay_memoria_sync() -> int:
+    """
+    Marca ACTIVA=FALSE entradas antiguas según prioridad.
+    Reglas: prioridad 1 → 7 días, prioridad 2 → 30 días, prioridad 3 → 90 días.
+    Prioridad 4-5 nunca expira automáticamente.
+    Devuelve número de entradas expiradas.
+    """
+    cliente = conectar()
+    hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["memory"])
+    filas = hoja.get_all_values()
+    if len(filas) < 2:
+        return 0
+
+    headers = [h.upper() for h in filas[0]]
+    idx = {h: i for i, h in enumerate(headers)}
+
+    col_activa = idx.get("ACTIVA")
+    col_prioridad = idx.get("PRIORIDAD")
+    col_fecha = idx.get("FECHA_CREACION")
+    if col_activa is None or col_prioridad is None or col_fecha is None:
+        return 0
+
+    ahora = datetime.now()
+    DIAS_POR_PRIORIDAD = {1: 7, 2: 30, 3: 90}
+
+    updates = []
+    for row_num, fila in enumerate(filas[1:], start=2):
+        activa = fila[col_activa].upper() if len(fila) > col_activa else "TRUE"
+        if activa not in ("TRUE", "1", "VERDADERO", "SI", "SÍ"):
+            continue
+
+        try:
+            prioridad = int(fila[col_prioridad] or 3)
+        except (ValueError, IndexError):
+            prioridad = 3
+
+        if prioridad > 3:
+            continue
+
+        try:
+            fecha = datetime.fromisoformat(fila[col_fecha])
+            edad_dias = (ahora - fecha).days
+        except (ValueError, IndexError):
+            continue
+
+        limite = DIAS_POR_PRIORIDAD.get(prioridad, 90)
+        if edad_dias > limite:
+            import gspread.utils as gu
+            cell = gu.rowcol_to_a1(row_num, col_activa + 1)
+            updates.append({"range": cell, "values": [["FALSE"]]})
+
+    if updates:
+        hoja.batch_update(updates)
+        print(f"[memoria] Decay: {len(updates)} entradas expiradas")
+
+    return len(updates)
+
+
+async def decay_memoria() -> int:
+    """Expira entradas de memoria antiguas en background. Devuelve número expiradas."""
+    return await asyncio.to_thread(_decay_memoria_sync)
 
 
 async def guardar_entreno(datos: dict) -> str:

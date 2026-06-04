@@ -28,6 +28,7 @@ from memory.conectar_sheets import (
     guardar_conversacion,
     guardar_memoria,
     guardar_entreno,
+    decay_memoria,
 )
 from engine.analizar_entrenamiento import analizar_entrenamiento
 from engine.parsear_entreno import parsear_entreno
@@ -125,7 +126,11 @@ async def procesar_mensaje(mensaje: str) -> str:
             mensaje_usuario=mensaje,
             respuesta_coach=respuesta,
             guardar_fn=guardar_memoria,
+            memoria_existente=contexto_usuario.get("memory", ""),
         )
     )
+
+    # 8. Decay de memoria en background (expira entradas antiguas/baja prioridad)
+    asyncio.create_task(decay_memoria())
 
     return respuesta

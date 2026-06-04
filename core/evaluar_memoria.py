@@ -24,6 +24,7 @@ Información que NO vale guardar:
 - Saludos o conversación trivial
 - Preguntas genéricas ya respondidas
 - Información que ya está en el perfil del usuario
+- Información que YA está en la memoria existente (ver sección MEMORIA ACTUAL)
 
 Responde SOLO con JSON válido, sin texto adicional, sin markdown:
 {
@@ -65,6 +66,7 @@ async def evaluar_y_guardar_memoria(
     mensaje_usuario: str,
     respuesta_coach: str,
     guardar_fn: Callable[[dict], Awaitable[None]],
+    memoria_existente: str = "",
 ) -> None:
     """
     Evalúa si la conversación merece guardarse en memoria.
@@ -76,11 +78,12 @@ async def evaluar_y_guardar_memoria(
         mensaje_usuario: mensaje del usuario en este turno.
         respuesta_coach: respuesta generada por el LLM.
         guardar_fn: función async que guarda un dict en la sheet de memory.
-                    Firma esperada: async def guardar_memoria(entrada: dict) -> None
-                    donde entrada tiene: tipo, contenido, prioridad
+        memoria_existente: texto con entradas actuales de memoria (para deduplicar).
     """
     try:
         conversacion = f"Usuario: {mensaje_usuario}\nCoach: {respuesta_coach}"
+        if memoria_existente and memoria_existente.strip():
+            conversacion += f"\n\n--- MEMORIA ACTUAL ---\n{memoria_existente.strip()}"
 
         respuesta = await llamar_llm(
             mensajes=[
