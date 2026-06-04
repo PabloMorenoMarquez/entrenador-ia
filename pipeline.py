@@ -28,10 +28,12 @@ from memory.conectar_sheets import (
     guardar_conversacion,
     guardar_memoria,
     guardar_entreno,
+    guardar_comida,
     decay_memoria,
 )
 from engine.analizar_entrenamiento import analizar_entrenamiento
 from engine.parsear_entreno import parsear_entreno
+from engine.parsear_comida import parsear_comida
 from rag.buscar_contexto import buscar_contexto
 
 
@@ -46,8 +48,9 @@ async def procesar_mensaje(mensaje: str) -> str:
     intencion = await detectar_intencion(mensaje)
 
     # 2. Leer datos necesarios en paralelo
-    # sheets + conversaciones + parse entreno (si aplica) al mismo tiempo
+    # sheets + conversaciones + parse entreno/comida (si aplica) al mismo tiempo
     es_registro_entreno = intencion.get("tipo") == "registro_entreno"
+    es_registro_comida  = intencion.get("tipo") == "registro_comida"
 
     tasks_lectura = [
         leer_sheets(intencion["sheets_necesarias"]),
@@ -55,17 +58,25 @@ async def procesar_mensaje(mensaje: str) -> str:
     ]
     if es_registro_entreno:
         tasks_lectura.append(parsear_entreno(mensaje))
+    elif es_registro_comida:
+        tasks_lectura.append(parsear_comida(mensaje))
 
     resultados_lectura = await asyncio.gather(*tasks_lectura, return_exceptions=True)
     contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
     conversaciones = resultados_lectura[1] if not isinstance(resultados_lectura[1], Exception) else []
-    datos_entreno_raw = resultados_lectura[2] if es_registro_entreno else None
-    if isinstance(datos_entreno_raw, Exception):
-        print(f"[pipeline] Error parseando entreno: {datos_entreno_raw}")
-        datos_entreno_raw = None
 
-    # 2.5 Guardar entreno si fue parseado correctamente
+    datos_parse_raw = resultados_lectura[2] if (es_registro_entreno or es_registro_comida) else None
+    if isinstance(datos_parse_raw, Exception):
+        print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
+        datos_parse_raw = None
+
+    datos_entreno_raw = datos_parse_raw if es_registro_entreno else None
+    datos_comida_raw  = datos_parse_raw if es_registro_comida  else None
+
+    # 2.5 Guardar registro si fue parseado correctamente
     entreno_registrado = None
+    comida_registrada  = None
+
     if datos_entreno_raw:
         try:
             sesion_id = await guardar_entreno(datos_entreno_raw)
@@ -73,6 +84,14 @@ async def procesar_mensaje(mensaje: str) -> str:
             print(f"[pipeline] Entreno guardado: {sesion_id}, {len(datos_entreno_raw.get('ejercicios', []))} ejercicios")
         except Exception as e:
             print(f"[pipeline] Error guardando entreno: {e}")
+
+    if datos_comida_raw:
+        try:
+            filas = await guardar_comida(datos_comida_raw)
+            comida_registrada = {**datos_comida_raw, "filas_guardadas": filas}
+            print(f"[pipeline] Comida guardada: {filas} alimento(s)")
+        except Exception as e:
+            print(f"[pipeline] Error guardando comida: {e}")
 
     # 3. Motor y RAG en paralelo (solo si los necesitamos)
     motor_output = None
@@ -105,6 +124,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         motor_output=motor_output,
         rag_context=rag_context,
         entreno_registrado=entreno_registrado,
+        comida_registrada=comida_registrada,
     )
 
     # 5. Llamar al LLM principal con fallback automático

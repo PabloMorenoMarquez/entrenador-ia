@@ -26,6 +26,7 @@ def construir_prompt(
     motor_output: Optional[dict] = None,
     rag_context: Optional[str] = None,
     entreno_registrado: Optional[dict] = None,
+    comida_registrada: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -68,6 +69,12 @@ def construir_prompt(
         texto = _formatear_entreno_registrado(entreno_registrado)
         if texto:
             bloques.append(f"## Entrenamiento que acaba de registrar el usuario\n{texto}")
+
+    # --- Comida recién registrada (registro_comida) ---
+    if comida_registrada:
+        texto = _formatear_comida_registrada(comida_registrada)
+        if texto:
+            bloques.append(f"## Comida que acaba de registrar el usuario\n{texto}")
 
     # --- Análisis del motor (solo si se ejecutó) ---
     if motor_output:
@@ -125,6 +132,42 @@ def _formatear_entreno_registrado(datos: dict) -> str:
             linea += f" RIR{rir}"
         if linea:
             partes.append(f"- {linea}")
+    return "\n".join(partes)
+
+
+def _formatear_comida_registrada(datos: dict) -> str:
+    """Formatea la comida recién guardada para incluirla en el prompt."""
+    partes = []
+    comida = datos.get("comida") or {}
+    if comida.get("tipo_comida"):
+        partes.append(f"Tipo: {comida['tipo_comida']}")
+    alimentos = datos.get("alimentos") or []
+    for al in alimentos:
+        nombre = al.get("alimento", "")
+        cantidad = al.get("cantidad_g_ml")
+        kcal = al.get("calorias")
+        prot = al.get("proteinas_g")
+        carbos = al.get("carbos_g")
+        grasas = al.get("grasas_g")
+        linea = nombre
+        if cantidad:
+            linea += f" {cantidad}g"
+        macros = []
+        if kcal:
+            macros.append(f"{kcal}kcal")
+        if prot:
+            macros.append(f"P{prot}g")
+        if carbos:
+            macros.append(f"C{carbos}g")
+        if grasas:
+            macros.append(f"G{grasas}g")
+        if macros:
+            linea += f" ({', '.join(macros)})"
+        if linea:
+            partes.append(f"- {linea}")
+    filas_guardadas = datos.get("filas_guardadas")
+    if filas_guardadas:
+        partes.append(f"Guardado: {filas_guardadas} alimento(s) en registro_comidas")
     return "\n".join(partes)
 
 

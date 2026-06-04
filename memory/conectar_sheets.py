@@ -337,6 +337,50 @@ async def guardar_entreno(datos: dict) -> str:
     return await asyncio.to_thread(_guardar_entreno_sync, datos)
 
 
+def _guardar_comida_sync(datos: dict) -> int:
+    """
+    Guarda alimentos en registro_comidas. Una fila por alimento.
+    datos: resultado de parsear_comida() — tiene 'alimentos' y 'comida'.
+    Devuelve número de filas escritas.
+    """
+    cliente = conectar()
+    spreadsheet = _get_spreadsheet(cliente)
+    ahora = datetime.now()
+    fecha = ahora.strftime("%Y-%m-%d")
+    hora = ahora.strftime("%H:%M")
+
+    comida = datos.get("comida") or {}
+    tipo_comida = comida.get("tipo_comida") or ""
+    notas_comida = comida.get("notas") or ""
+
+    # Columnas: FECHA|HORA|TIPO_COMIDA|ALIMENTO|CANTIDAD_G_ML|CALORIAS|
+    #           PROTEINAS_G|CARBOS_G|GRASAS_G|FIBRA_G|NOTAS
+    hoja = spreadsheet.worksheet(NOMBRE_HOJAS["registro_comidas"])
+    alimentos = datos.get("alimentos") or []
+    for alimento in alimentos:
+        notas_fila = alimento.get("notas") or notas_comida
+        hoja.append_row([
+            fecha,
+            hora,
+            tipo_comida,
+            alimento.get("alimento") or "",
+            alimento.get("cantidad_g_ml") or "",
+            alimento.get("calorias") or "",
+            alimento.get("proteinas_g") or "",
+            alimento.get("carbos_g") or "",
+            alimento.get("grasas_g") or "",
+            alimento.get("fibra_g") or "",
+            notas_fila,
+        ])
+
+    return len(alimentos)
+
+
+async def guardar_comida(datos: dict) -> int:
+    """Guarda alimentos en registro_comidas. Devuelve número de filas escritas."""
+    return await asyncio.to_thread(_guardar_comida_sync, datos)
+
+
 # ---- Uso directo (debug) ----
 
 if __name__ == "__main__":
