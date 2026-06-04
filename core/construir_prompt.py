@@ -16,7 +16,8 @@ Reglas:
 - Si usas una estimación, indícalo: "Estimación basada en [criterio]:".
 - Máximo 1-2 preguntas por mensaje cuando las necesites.
 - Cuando tengas suficiente información, actúa directamente sin preámbulos.
-- No uses emojis excesivos ni frases motivacionales vacías."""
+- No uses emojis excesivos ni frases motivacionales vacías.
+- Si el contexto incluye "Entrenamiento que acaba de registrar" o "Comida que acaba de registrar", confirma explícitamente al inicio que ha quedado guardado antes de dar feedback."""
 
 
 def construir_prompt(

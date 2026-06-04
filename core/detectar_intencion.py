@@ -91,7 +91,7 @@ def _extraer_json(texto: str) -> dict:
 # Fallback cuando la detección falla — no rompe el pipeline
 INTENCION_FALLBACK = {
     "tipo": "general",
-    "sheets_necesarias": ["perfil_usuario", "memory"],
+    "sheets_necesarias": ["perfil_usuario", "objetivos", "memory"],
     "necesita_motor": False,
     "necesita_rag": False,
 }
@@ -126,7 +126,7 @@ async def detectar_intencion(mensaje: str) -> dict:
         ]
 
         # Asegurar que siempre hay sheets mínimas
-        for sheet_minima in ["perfil_usuario", "memory"]:
+        for sheet_minima in ["perfil_usuario", "objetivos", "memory"]:
             if sheet_minima not in intencion["sheets_necesarias"]:
                 intencion["sheets_necesarias"].append(sheet_minima)
 
