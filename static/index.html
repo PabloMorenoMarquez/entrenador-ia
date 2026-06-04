@@ -2,7 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0d18" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Coach IA" />
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/icon-192.svg" />
   <title>Coach IA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -283,6 +289,30 @@
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #1a1a2e; border-radius: 3px; }
+
+    /* ---- Mobile ---- */
+    @media (max-width: 600px) {
+      header { height: 56px; padding: 0 16px; }
+
+      #chat { padding: 16px 12px; gap: 16px; }
+
+      .bubble { max-width: 85%; font-size: 0.88rem; }
+
+      /* Prevent iOS auto-zoom on textarea focus */
+      textarea { font-size: 16px; padding: 10px 14px; }
+
+      .form-wrap {
+        padding: 10px 12px;
+        /* push above iOS home indicator */
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+      }
+
+      button { width: 44px; height: 44px; }
+
+      .avatar { width: 26px; height: 26px; font-size: 0.68rem; border-radius: 7px; }
+
+      .status span { display: none; }
+    }
   </style>
 </head>
 <body>
