@@ -1,7 +1,12 @@
 .env
 token.json
 credenciales.json
+service_account.json
+credentials.json
 venv/
 __pycache__/
 *.pyc
+*.pyo
 libros/
+data/libros/
+.DS_Store

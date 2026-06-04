@@ -1,5 +1,5 @@
 import json
-from motor_decision import generar_informe, analizar_ejercicio
+from engine.motor_decision import generar_informe, analizar_ejercicio
 
 # -----------------------------------------------
 # TESTS DEL MOTOR DE DECISIÓN
