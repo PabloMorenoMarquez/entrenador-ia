@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coach IA</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 14px 20px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      font-weight: 600;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header span { color: #e2e8f0; }
+
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      line-height: 1.55;
+      font-size: 0.92rem;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: #4f46e5;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.coach {
+      align-self: flex-start;
+      background: #1e2235;
+      color: #e2e8f0;
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg.coach.thinking {
+      color: #64748b;
+      font-style: italic;
+    }
+
+    form {
+      display: flex;
+      gap: 8px;
+      padding: 14px 16px;
+      background: #1a1d27;
+      border-top: 1px solid #2d3148;
+    }
+
+    textarea {
+      flex: 1;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 0.92rem;
+      padding: 10px 14px;
+      resize: none;
+      max-height: 120px;
+      min-height: 42px;
+      overflow-y: auto;
+      line-height: 1.4;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus { border-color: #4f46e5; }
+    textarea::placeholder { color: #475569; }
+
+    button {
+      background: #4f46e5;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0 18px;
+      transition: background 0.15s, opacity 0.15s;
+      align-self: flex-end;
+      height: 42px;
+      flex-shrink: 0;
+    }
+
+    button:hover { background: #4338ca; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <header>&#127947; <span>Coach IA</span></header>
+  <div id="chat"></div>
+  <form id="form">
+    <textarea id="input" placeholder="Escribe tu mensaje..." rows="1" autocomplete="off"></textarea>
+    <button id="btn" type="submit">&#10148;</button>
+  </form>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const btn = document.getElementById('btn');
+
+    function addMsg(text, role) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMsg(text, 'user');
+      input.value = '';
+      input.style.height = 'auto';
+      btn.disabled = true;
+
+      const thinking = addMsg('Coach IA está escribiendo...', 'coach thinking');
+
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mensaje: text }),
+        });
+        const data = await res.json();
+        thinking.remove();
+        if (res.ok) {
+          addMsg(data.respuesta, 'coach');
+        } else {
+          addMsg('Error: ' + (data.detail || res.status), 'coach');
+        }
+      } catch (err) {
+        thinking.remove();
+        addMsg('Error de conexión. Inténtalo de nuevo.', 'coach');
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    });
+
+    input.focus();
+  </script>
+</body>
+</html>

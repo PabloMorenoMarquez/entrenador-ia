@@ -4,11 +4,18 @@ Punto de entrada HTTP para todas las peticiones.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+import os
 
 from pipeline import procesar_mensaje
 
 app = FastAPI(title="Entrenador IA")
+
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
 # ---- Modelos de request/response ----
@@ -22,6 +29,11 @@ class ChatResponse(BaseModel):
 
 
 # ---- Rutas ----
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return FileResponse(os.path.join(_static_dir, "index.html"))
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
@@ -48,4 +60,9 @@ async def chat(request: ChatRequest):
 
 @app.get("/health")
 async def health():
+    return {"status": "ok"}
+
+
+@app.get("/ping")
+async def ping():
     return {"status": "ok"}
