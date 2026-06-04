@@ -51,16 +51,21 @@ def _obtener_sesiones(cliente) -> list[dict]:
     ]
 
 
-_OBJETIVOS_VALIDOS = {"hipertrofia", "fuerza", "recomposicion"}
+_MAPA_OBJETIVOS = {
+    "hipertrofia":   ["hipertrofia", "ganar músculo", "ganar musculo", "masa muscular", "volumen"],
+    "fuerza":        ["fuerza", "strength", "powerlifting", "1rm", "levantar más"],
+    "recomposicion": ["recomposicion", "recomposición", "perder grasa", "definicion", "definición",
+                      "perder peso", "grasa y músculo", "grasa y musculo"],
+}
 
 def _extraer_objetivo(contexto_usuario: dict) -> str:
-    """Extrae el objetivo principal del texto de la sheet 'objetivos'."""
+    """Extrae el objetivo del texto de la sheet 'objetivos' usando keyword matching."""
     texto = (contexto_usuario or {}).get("objetivos", "") or ""
     texto_lower = texto.lower()
-    for obj in _OBJETIVOS_VALIDOS:
-        if obj in texto_lower:
-            return obj
-    return "recomposicion"  # default
+    for objetivo, palabras in _MAPA_OBJETIVOS.items():
+        if any(p in texto_lower for p in palabras):
+            return objetivo
+    return "recomposicion"  # default razonable si no hay match
 
 
 def analizar_entrenamiento(contexto_usuario: dict = None) -> dict:
