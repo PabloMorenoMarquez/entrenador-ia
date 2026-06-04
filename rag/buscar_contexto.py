@@ -10,7 +10,6 @@ load_dotenv()
 openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
-# Categorías de libros
 LIBROS_POR_CATEGORIA = {
     "entrenamiento": [
         "Muscle and Strength Pyramid",
@@ -51,135 +50,146 @@ PALABRAS_CLAVE = {
     ]
 }
 
+
 def detectar_categoria(pregunta):
-    """
-    Detecta la categoría de la pregunta contando
-    palabras clave de cada categoría.
-    """
     pregunta_lower = pregunta.lower()
     puntuaciones = {}
-
     for categoria, palabras in PALABRAS_CLAVE.items():
-        puntuaciones[categoria] = sum(
-            1 for palabra in palabras if palabra in pregunta_lower
-        )
-
-    # Si hay empate o ninguna categoría clara, devolver None (buscar en todo)
-    max_puntuacion = max(puntuaciones.values())
-    if max_puntuacion == 0:
+        puntuaciones[categoria] = sum(1 for p in palabras if p in pregunta_lower)
+    max_p = max(puntuaciones.values())
+    if max_p == 0:
         return None
-
     return max(puntuaciones, key=puntuaciones.get)
+
 
 def hash_texto(texto):
     return hashlib.md5(texto.encode()).hexdigest()
 
-def traducir_al_español(texto):
-    """Traduce usando OpenRouter con caché en Supabase."""
-    hash_key = hash_texto(texto)
 
-    # Buscar en caché primero
-    try:
-        resultado = supabase.table("traducciones_cache").select("texto_traducido").eq("chunk_hash", hash_key).execute()
-        if resultado.data:
-            return resultado.data[0]["texto_traducido"]
-    except Exception as e:
-        print(f"Error buscando en caché: {e}")
-
-    # Si no está en caché, traducir
+def _traducir_con_llm(texto: str) -> str:
+    """Llama al LLM para traducir. Solo se ejecuta si no hay caché."""
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers={
             "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         },
         json={
-            "model": "nvidia/nemotron-3-nano-30b-a3b:free",
+            "model": "openai/gpt-4o-mini",
             "max_tokens": 2000,
             "temperature": 0,
             "messages": [
                 {
                     "role": "system",
-                    "content": "Eres un traductor especializado en nutrición deportiva y entrenamiento. Traduce el texto al español manteniendo términos técnicos correctos. Devuelve solo la traducción, sin explicaciones ni texto adicional."
+                    "content": (
+                        "Eres un traductor especializado en nutrición deportiva y entrenamiento. "
+                        "Traduce el texto al español manteniendo términos técnicos correctos. "
+                        "Devuelve solo la traducción, sin explicaciones ni texto adicional."
+                    ),
                 },
-                {
-                    "role": "user",
-                    "content": texto
-                }
-            ]
-        }
+                {"role": "user", "content": texto},
+            ],
+        },
+        timeout=30,
     )
     data = response.json()
     if "choices" not in data:
         return texto
-    texto_traducido = data["choices"][0]["message"]["content"]
+    return data["choices"][0]["message"]["content"]
 
-    # Guardar en caché
+
+def traducir_chunks(docs: list[dict]) -> dict[str, str]:
+    """
+    Traduce una lista de docs al español usando caché en Supabase.
+    Hace UN solo SELECT para todos los hashes (batch lookup).
+    Solo llama al LLM para los chunks sin caché.
+    Devuelve {chunk_hash: texto_traducido}.
+    """
+    hashes = [hash_texto(doc["content"]) for doc in docs]
+    hash_a_contenido = {hash_texto(doc["content"]): doc["content"] for doc in docs}
+
+    # Batch lookup: un solo SELECT para todos los hashes
+    traducciones: dict[str, str] = {}
     try:
-        supabase.table("traducciones_cache").insert({
-            "chunk_hash": hash_key,
-            "texto_original": texto,
-            "texto_traducido": texto_traducido
-        }).execute()
+        resultado = (
+            supabase.table("traducciones_cache")
+            .select("chunk_hash,texto_traducido")
+            .in_("chunk_hash", hashes)
+            .execute()
+        )
+        for row in resultado.data:
+            traducciones[row["chunk_hash"]] = row["texto_traducido"]
     except Exception as e:
-        print(f"Error guardando en caché: {e}")
+        print(f"[rag] Error leyendo caché: {e}")
 
-    return texto_traducido
+    # Traducir solo los que faltan
+    pendientes = [h for h in hashes if h not in traducciones]
+    for h in pendientes:
+        texto_original = hash_a_contenido[h]
+        try:
+            traducido = _traducir_con_llm(texto_original)
+            traducciones[h] = traducido
+            # Guardar en caché
+            supabase.table("traducciones_cache").insert({
+                "chunk_hash": h,
+                "texto_original": texto_original,
+                "texto_traducido": traducido,
+            }).execute()
+        except Exception as e:
+            print(f"[rag] Error traduciendo chunk: {e}")
+            traducciones[h] = texto_original  # fallback: texto original
+
+    return traducciones
+
 
 def buscar_contexto(pregunta, num_resultados=5):
-    # Detectar categoría
     categoria = detectar_categoria(pregunta)
 
-    # Convertir la pregunta a embedding
     response = openai.embeddings.create(
         model="text-embedding-3-small",
-        input=pregunta
+        input=pregunta,
     )
     embedding_pregunta = response.data[0].embedding
 
-    # Buscar chunks similares en Supabase
     resultados = supabase.rpc("buscar_documentos", {
         "query_embedding": embedding_pregunta,
-        "match_count": 20  # Traemos más para filtrar después
+        "match_count": 20,
     }).execute()
 
-    # Filtrar por categoría si se detectó una
     docs_filtrados = resultados.data
     if categoria and categoria in LIBROS_POR_CATEGORIA:
         libros_categoria = LIBROS_POR_CATEGORIA[categoria]
-        docs_filtrados = [
+        filtrados = [
             doc for doc in resultados.data
-            if any(libro.lower() in doc['metadata']['libro'].lower()
-                   for libro in libros_categoria)
+            if any(libro.lower() in doc["metadata"]["libro"].lower() for libro in libros_categoria)
         ]
-        # Si el filtro deja muy pocos resultados, usar todos
-        if len(docs_filtrados) < 3:
-            docs_filtrados = resultados.data
+        if len(filtrados) >= 3:
+            docs_filtrados = filtrados
 
-    # Coger los mejores num_resultados
     docs_filtrados = docs_filtrados[:num_resultados]
 
-    # Traducir cada chunk con caché
+    # Un solo batch lookup + traducir solo los faltantes
+    traducciones = traducir_chunks(docs_filtrados)
+
     contexto = ""
     if categoria:
         contexto += f"[Categoría detectada: {categoria}]\n\n"
 
     for doc in docs_filtrados:
-        texto_traducido = traducir_al_español(doc['content'])
-        contexto += f"[Fuente: {doc['metadata']['libro']}]\n"
-        contexto += f"{texto_traducido}\n\n"
+        h = hash_texto(doc["content"])
+        texto = traducciones.get(h, doc["content"])
+        contexto += f"[Fuente: {doc['metadata']['libro']}]\n{texto}\n\n"
 
     return contexto
 
+
 if __name__ == "__main__":
     import time
-
     preguntas_test = [
         "¿Cuántas series necesito para hipertrofia?",
         "¿Cuánta proteína debo comer al día?",
         "¿Cómo afecta la luz solar al sueño?"
     ]
-
     for pregunta in preguntas_test:
         print(f"\nPregunta: {pregunta}")
         inicio = time.time()
