@@ -161,9 +161,9 @@ def _guardar_conversacion_sync(mensaje_usuario: str, respuesta_coach: str) -> No
     hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["conversaciones"])
     timestamp = datetime.now().isoformat()
 
-    # Cada turno = 2 filas: usuario y assistant
-    hoja.append_row([timestamp, "user", mensaje_usuario])
-    hoja.append_row([timestamp, "assistant", respuesta_coach])
+    # Columnas: ID_CONVERSACION | TIMESTAMP | ROL | CONTENIDO
+    hoja.append_row(["", timestamp, "user", mensaje_usuario])
+    hoja.append_row(["", timestamp, "assistant", respuesta_coach])
 
 
 def _guardar_memoria_sync(entrada: dict) -> None:
@@ -206,6 +206,70 @@ async def guardar_conversacion(mensaje_usuario: str, respuesta_coach: str) -> No
 async def guardar_memoria(entrada: dict) -> None:
     """Guarda una entrada en la sheet de memory."""
     await asyncio.to_thread(_guardar_memoria_sync, entrada)
+
+
+def _guardar_entreno_sync(datos: dict) -> str:
+    """
+    Guarda ejercicios y sesión en ejercicios_detalle + historial_entrenamientos.
+    datos: resultado de parsear_entreno() — tiene 'ejercicios' y 'sesion'.
+    Devuelve sesion_id generado.
+    """
+    cliente = conectar()
+    spreadsheet = _get_spreadsheet(cliente)
+    ahora = datetime.now()
+    sesion_id = ahora.strftime("%Y%m%d-%H%M%S")
+    fecha = ahora.strftime("%Y-%m-%d")
+    hora = ahora.strftime("%H:%M")
+
+    # -- historial_entrenamientos --
+    # Columnas: SESION_ID|FECHA|HORA_INICIO|HORA_FIN|DURACION_MIN|TIPO_SESION|
+    #           GRUPO_MUSCULAR_PRINCIPAL|GRUPO_MUSCULAR_SECUNDARIO|
+    #           NIVEL_ENERGIA_1_5|NIVEL_ESFUERZO_1_10|CALORIAS_APROX|NOTAS_SESION
+    sesion = datos.get("sesion") or {}
+    hoja_hist = spreadsheet.worksheet(NOMBRE_HOJAS["historial_entrenamientos"])
+    hoja_hist.append_row([
+        sesion_id,
+        fecha,
+        hora,
+        "",
+        sesion.get("duracion_min") or "",
+        sesion.get("tipo_sesion") or "",
+        sesion.get("grupo_muscular_principal") or "",
+        "",
+        sesion.get("nivel_energia") or "",
+        sesion.get("nivel_esfuerzo") or "",
+        "",
+        sesion.get("notas") or "",
+    ])
+
+    # -- ejercicios_detalle --
+    # Columnas: SESION_ID|FECHA|ORDEN|EJERCICIO|GRUPO_MUSCULAR|SERIES|
+    #           REPS_OBJETIVO|REPS_REALIZADAS|PESO_KG|TIPO_PESO|
+    #           DESCANSO_SEG|RIR|NOTAS_EJERCICIO
+    hoja_ej = spreadsheet.worksheet(NOMBRE_HOJAS["ejercicios_detalle"])
+    for orden, ej in enumerate(datos.get("ejercicios") or [], start=1):
+        hoja_ej.append_row([
+            sesion_id,
+            fecha,
+            orden,
+            ej.get("ejercicio") or "",
+            ej.get("grupo_muscular") or "",
+            ej.get("series") or "",
+            ej.get("reps_objetivo") or "",
+            ej.get("reps_realizadas") or "",
+            ej.get("peso_kg") or "",
+            ej.get("tipo_peso") or "",
+            ej.get("descanso_seg") or "",
+            ej.get("rir") or "",
+            ej.get("notas") or "",
+        ])
+
+    return sesion_id
+
+
+async def guardar_entreno(datos: dict) -> str:
+    """Guarda sesión y ejercicios en Sheets. Devuelve sesion_id."""
+    return await asyncio.to_thread(_guardar_entreno_sync, datos)
 
 
 # ---- Uso directo (debug) ----

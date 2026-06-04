@@ -25,6 +25,7 @@ def construir_prompt(
     conversaciones: list[dict],
     motor_output: Optional[dict] = None,
     rag_context: Optional[str] = None,
+    entreno_registrado: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -62,6 +63,12 @@ def construir_prompt(
     if contexto_usuario.get("memory"):
         bloques.append(f"## Lo que recuerdo del usuario\n{contexto_usuario['memory']}")
 
+    # --- Entreno recién registrado (registro_entreno) ---
+    if entreno_registrado:
+        texto = _formatear_entreno_registrado(entreno_registrado)
+        if texto:
+            bloques.append(f"## Entrenamiento que acaba de registrar el usuario\n{texto}")
+
     # --- Análisis del motor (solo si se ejecutó) ---
     if motor_output:
         texto_motor = _formatear_motor(motor_output)
@@ -91,6 +98,34 @@ def construir_prompt(
     mensajes.append({"role": "user", "content": mensaje})
 
     return mensajes
+
+
+def _formatear_entreno_registrado(datos: dict) -> str:
+    """Formatea el entreno recién guardado para incluirlo en el prompt."""
+    partes = []
+    sesion_id = datos.get("sesion_id", "")
+    if sesion_id:
+        partes.append(f"Sesion ID: {sesion_id}")
+    sesion = datos.get("sesion") or {}
+    if sesion.get("tipo_sesion"):
+        partes.append(f"Tipo: {sesion['tipo_sesion']}")
+    ejercicios = datos.get("ejercicios") or []
+    for ej in ejercicios:
+        nombre = ej.get("ejercicio", "")
+        series = ej.get("series")
+        reps = ej.get("reps_realizadas") or ej.get("reps_objetivo")
+        peso = ej.get("peso_kg")
+        rir = ej.get("rir")
+        linea = nombre
+        if series and reps:
+            linea += f" {series}x{reps}"
+        if peso:
+            linea += f" {peso}kg"
+        if rir is not None:
+            linea += f" RIR{rir}"
+        if linea:
+            partes.append(f"- {linea}")
+    return "\n".join(partes)
 
 
 def _formatear_motor(motor_output: dict) -> str:

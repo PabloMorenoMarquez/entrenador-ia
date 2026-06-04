@@ -23,13 +23,15 @@ from core.evaluar_memoria import evaluar_y_guardar_memoria
 # Estos imports asumen la nueva estructura de carpetas.
 # Si los archivos aún están en la raíz, ajusta las rutas.
 from memory.conectar_sheets import (
-    leer_sheets,          # async def leer_sheets(nombres: list[str]) -> dict
-    leer_conversaciones,  # async def leer_conversaciones(limite: int) -> list[dict]
-    guardar_conversacion, # async def guardar_conversacion(mensaje_usuario: str, respuesta_coach: str) -> None
-    guardar_memoria,      # async def guardar_memoria(entrada: dict) -> None
+    leer_sheets,
+    leer_conversaciones,
+    guardar_conversacion,
+    guardar_memoria,
+    guardar_entreno,
 )
-from engine.analizar_entrenamiento import analizar_entrenamiento  # sync, devuelve dict informe
-from rag.buscar_contexto import buscar_contexto                    # sync, devuelve str
+from engine.analizar_entrenamiento import analizar_entrenamiento
+from engine.parsear_entreno import parsear_entreno
+from rag.buscar_contexto import buscar_contexto
 
 
 async def procesar_mensaje(mensaje: str) -> str:
@@ -43,11 +45,33 @@ async def procesar_mensaje(mensaje: str) -> str:
     intencion = await detectar_intencion(mensaje)
 
     # 2. Leer datos necesarios en paralelo
-    # sheets + conversaciones al mismo tiempo para reducir latencia
-    contexto_usuario, conversaciones = await asyncio.gather(
+    # sheets + conversaciones + parse entreno (si aplica) al mismo tiempo
+    es_registro_entreno = intencion.get("tipo") == "registro_entreno"
+
+    tasks_lectura = [
         leer_sheets(intencion["sheets_necesarias"]),
         leer_conversaciones(limite=10),
-    )
+    ]
+    if es_registro_entreno:
+        tasks_lectura.append(parsear_entreno(mensaje))
+
+    resultados_lectura = await asyncio.gather(*tasks_lectura, return_exceptions=True)
+    contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
+    conversaciones = resultados_lectura[1] if not isinstance(resultados_lectura[1], Exception) else []
+    datos_entreno_raw = resultados_lectura[2] if es_registro_entreno else None
+    if isinstance(datos_entreno_raw, Exception):
+        print(f"[pipeline] Error parseando entreno: {datos_entreno_raw}")
+        datos_entreno_raw = None
+
+    # 2.5 Guardar entreno si fue parseado correctamente
+    entreno_registrado = None
+    if datos_entreno_raw:
+        try:
+            sesion_id = await guardar_entreno(datos_entreno_raw)
+            entreno_registrado = {**datos_entreno_raw, "sesion_id": sesion_id}
+            print(f"[pipeline] Entreno guardado: {sesion_id}, {len(datos_entreno_raw.get('ejercicios', []))} ejercicios")
+        except Exception as e:
+            print(f"[pipeline] Error guardando entreno: {e}")
 
     # 3. Motor y RAG en paralelo (solo si los necesitamos)
     motor_output = None
@@ -79,6 +103,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         conversaciones=conversaciones,
         motor_output=motor_output,
         rag_context=rag_context,
+        entreno_registrado=entreno_registrado,
     )
 
     # 5. Llamar al LLM principal con fallback automático
