@@ -10,3 +10,5 @@ __pycache__/
 libros/
 data/libros/
 .DS_Store
+frontend/node_modules/
+frontend/dist/

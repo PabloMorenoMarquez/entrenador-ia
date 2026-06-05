@@ -28,6 +28,7 @@ def construir_prompt(
     rag_context: Optional[str] = None,
     entreno_registrado: Optional[dict] = None,
     comida_registrada: Optional[dict] = None,
+    macros_recalculados: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -76,6 +77,18 @@ def construir_prompt(
         texto = _formatear_comida_registrada(comida_registrada)
         if texto:
             bloques.append(f"## Comida que acaba de registrar el usuario\n{texto}")
+
+    # --- Macros recalculados por LLM ---
+    if macros_recalculados:
+        kcal = macros_recalculados.get("kcal", "")
+        p = macros_recalculados.get("proteinas_g", "")
+        c = macros_recalculados.get("carbos_g", "")
+        g = macros_recalculados.get("grasas_g", "")
+        notas = macros_recalculados.get("notas", "")
+        texto = f"Nuevos macros objetivo diarios calculados y guardados: {kcal} kcal, {p}g proteína, {c}g carbos, {g}g grasa."
+        if notas:
+            texto += f" {notas}"
+        bloques.append(f"## Macros objetivo recalculados\n{texto}")
 
     # --- Análisis del motor (solo si se ejecutó) ---
     if motor_output:

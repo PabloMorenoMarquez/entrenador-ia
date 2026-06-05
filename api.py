@@ -28,7 +28,11 @@ class ChatResponse(BaseModel):
     respuesta: str
 
 
-# ---- Rutas ----
+class PerfilUpdateRequest(BaseModel):
+    campos: dict
+
+
+# ---- Rutas chat ----
 
 @app.get("/", include_in_schema=False)
 async def root():
@@ -37,10 +41,6 @@ async def root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Ruta principal de conversación.
-    Recibe un mensaje y devuelve la respuesta del coach.
-    """
     if not request.mensaje or not request.mensaje.strip():
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío.")
 
@@ -49,11 +49,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(respuesta=respuesta)
 
     except RuntimeError as e:
-        # Todos los modelos fallaron (429 generalizado, etc.)
-        raise HTTPException(
-            status_code=503,
-            detail=f"Servicio temporalmente no disponible: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail=f"Servicio temporalmente no disponible: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
@@ -66,3 +62,76 @@ async def health():
 @app.api_route("/ping", methods=["GET", "HEAD"])
 async def ping():
     return {"status": "ok"}
+
+
+# ---- Endpoints API REST para la SPA ----
+
+@app.get("/api/perfil")
+async def get_perfil():
+    try:
+        from memory.lectura_estructurada import leer_perfil
+        return await leer_perfil()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/perfil")
+async def post_perfil(request: PerfilUpdateRequest):
+    try:
+        from memory.lectura_estructurada import guardar_perfil
+        await guardar_perfil(request.campos)
+        from memory.lectura_estructurada import leer_perfil
+        return await leer_perfil()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rutina")
+async def get_rutina():
+    try:
+        from memory.lectura_estructurada import leer_rutina
+        data = await leer_rutina()
+        if not data.get("sesion_id"):
+            raise HTTPException(status_code=404, detail="No hay sesiones registradas.")
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/nutricion/hoy")
+async def get_nutricion_hoy():
+    try:
+        from memory.lectura_estructurada import leer_nutricion_hoy
+        return await leer_nutricion_hoy()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/nutricion/semana")
+async def get_nutricion_semana():
+    try:
+        from memory.lectura_estructurada import leer_nutricion_semana
+        return await leer_nutricion_semana()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/historial")
+async def get_historial():
+    try:
+        from memory.lectura_estructurada import leer_historial
+        return await leer_historial()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- Catch-all para BrowserRouter (debe ir al final) ----
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    index = os.path.join(_static_dir, "index.html")
+    if os.path.exists(index):
+        return FileResponse(index)
+    raise HTTPException(status_code=404, detail="Not found")

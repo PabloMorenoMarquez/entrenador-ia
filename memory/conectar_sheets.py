@@ -31,6 +31,7 @@ NOMBRE_HOJAS = {
     "ejercicios_detalle":    "ejercicios_detalle",
     "historial_entrenamientos": "historial_entrenamientos",
     "registro_comidas":  "registro_comidas",
+    "macros_objetivo":   "macros_objetivo",
 }
 
 
@@ -379,6 +380,88 @@ def _guardar_comida_sync(datos: dict) -> int:
 async def guardar_comida(datos: dict) -> int:
     """Guarda alimentos en registro_comidas. Devuelve número de filas escritas."""
     return await asyncio.to_thread(_guardar_comida_sync, datos)
+
+
+def _leer_macros_objetivo_activos_sync(periodo: str) -> dict | None:
+    """
+    Lee la fila activa de macros_objetivo para un periodo dado.
+    Columnas: FECHA_CALCULO|PERIODO|KCAL|PROTEINAS_G|CARBOS_G|GRASAS_G|NOTAS|ACTIVA
+    Devuelve dict con los macros o None si no existe.
+    """
+    cliente = conectar()
+    filas = _leer_hoja_sync(cliente, NOMBRE_HOJAS["macros_objetivo"])
+    for fila in reversed(filas):
+        activa = str(fila.get("ACTIVA", "")).upper()
+        if activa in ("TRUE", "1", "VERDADERO", "SI", "SÍ") and fila.get("PERIODO") == periodo:
+            return {
+                "kcal": _to_num(fila.get("KCAL")),
+                "proteinas_g": _to_num(fila.get("PROTEINAS_G")),
+                "carbos_g": _to_num(fila.get("CARBOS_G")),
+                "grasas_g": _to_num(fila.get("GRASAS_G")),
+                "notas": fila.get("NOTAS", ""),
+                "fecha_calculo": fila.get("FECHA_CALCULO", ""),
+            }
+    return None
+
+
+def _guardar_macros_objetivo_sync(periodo: str, macros: dict) -> None:
+    """
+    Desactiva la fila activa previa del mismo periodo y escribe una nueva ACTIVA=TRUE.
+    macros: { kcal, proteinas_g, carbos_g, grasas_g, notas }
+    """
+    cliente = conectar()
+    spreadsheet = _get_spreadsheet(cliente)
+    hoja = spreadsheet.worksheet(NOMBRE_HOJAS["macros_objetivo"])
+    filas = hoja.get_all_values()
+
+    if len(filas) > 1:
+        headers = [h.upper() for h in filas[0]]
+        idx = {h: i for i, h in enumerate(headers)}
+        col_activa = idx.get("ACTIVA")
+        col_periodo = idx.get("PERIODO")
+
+        if col_activa is not None and col_periodo is not None:
+            import gspread.utils as gu
+            updates = []
+            for row_num, fila in enumerate(filas[1:], start=2):
+                if len(fila) > col_periodo and fila[col_periodo] == periodo:
+                    activa = fila[col_activa].upper() if len(fila) > col_activa else ""
+                    if activa in ("TRUE", "1", "VERDADERO", "SI", "SÍ"):
+                        cell = gu.rowcol_to_a1(row_num, col_activa + 1)
+                        updates.append({"range": cell, "values": [["FALSE"]]})
+            if updates:
+                hoja.batch_update(updates)
+
+    timestamp = datetime.now().isoformat()
+    hoja.append_row([
+        timestamp,
+        periodo,
+        macros.get("kcal", ""),
+        macros.get("proteinas_g", ""),
+        macros.get("carbos_g", ""),
+        macros.get("grasas_g", ""),
+        macros.get("notas", ""),
+        "TRUE",
+    ])
+
+
+def _to_num(val):
+    """Convierte string a int/float, o devuelve 0."""
+    try:
+        f = float(str(val).replace(",", "."))
+        return int(f) if f == int(f) else f
+    except (ValueError, TypeError):
+        return 0
+
+
+async def leer_macros_objetivo_activos(periodo: str = "dia") -> dict | None:
+    """Devuelve macros objetivo activos para el periodo indicado, o None si no existen."""
+    return await asyncio.to_thread(_leer_macros_objetivo_activos_sync, periodo)
+
+
+async def guardar_macros_objetivo(periodo: str, macros: dict) -> None:
+    """Persiste los macros objetivo para un periodo, desactivando el anterior."""
+    await asyncio.to_thread(_guardar_macros_objetivo_sync, periodo, macros)
 
 
 # ---- Uso directo (debug) ----

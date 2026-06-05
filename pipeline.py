@@ -29,6 +29,7 @@ from memory.conectar_sheets import (
     guardar_memoria,
     guardar_entreno,
     guardar_comida,
+    guardar_macros_objetivo,
     decay_memoria,
 )
 from engine.analizar_entrenamiento import analizar_entrenamiento
@@ -51,6 +52,7 @@ async def procesar_mensaje(mensaje: str) -> str:
     # sheets + conversaciones + parse entreno/comida (si aplica) al mismo tiempo
     es_registro_entreno = intencion.get("tipo") == "registro_entreno"
     es_registro_comida  = intencion.get("tipo") == "registro_comida"
+    es_recalcular_macros = intencion.get("tipo") == "recalcular_macros"
 
     tasks_lectura = [
         leer_sheets(intencion["sheets_necesarias"]),
@@ -93,6 +95,19 @@ async def procesar_mensaje(mensaje: str) -> str:
         except Exception as e:
             print(f"[pipeline] Error guardando comida: {e}")
 
+    # 2.6 Recalcular macros si fue solicitado
+    macros_recalculados = None
+    if es_recalcular_macros:
+        try:
+            from engine.calcular_macros import calcular_macros_objetivo
+            from memory.lectura_estructurada import leer_perfil
+            perfil = await leer_perfil()
+            macros_recalculados = await calcular_macros_objetivo(perfil)
+            await guardar_macros_objetivo("dia", macros_recalculados)
+            print(f"[pipeline] Macros recalculados: {macros_recalculados.get('kcal')} kcal")
+        except Exception as e:
+            print(f"[pipeline] Error recalculando macros: {e}")
+
     # 3. Motor y RAG en paralelo (solo si los necesitamos)
     motor_output = None
     rag_context = None
@@ -125,6 +140,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         rag_context=rag_context,
         entreno_registrado=entreno_registrado,
         comida_registrada=comida_registrada,
+        macros_recalculados=macros_recalculados,
     )
 
     # 5. Llamar al LLM principal con fallback automático

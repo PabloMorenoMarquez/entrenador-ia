@@ -1,0 +1,21 @@
+const BASE = ''
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(BASE + path, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export const getPerfil = () => apiFetch('/api/perfil')
+export const postPerfil = (campos) => apiFetch('/api/perfil', { method: 'POST', body: JSON.stringify({ campos }) })
+export const getRutina = () => apiFetch('/api/rutina')
+export const getNutricionHoy = () => apiFetch('/api/nutricion/hoy')
+export const getNutricionSemana = () => apiFetch('/api/nutricion/semana')
+export const getHistorial = () => apiFetch('/api/historial')
+export const postChat = (mensaje) => apiFetch('/chat', { method: 'POST', body: JSON.stringify({ mensaje }) })
