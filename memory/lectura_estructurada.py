@@ -122,8 +122,10 @@ def _sumar_macros(filas: list[dict]) -> dict:
     return total
 
 
+_MACRO_KEYS = ("kcal", "proteinas_g", "carbos_g", "grasas_g")
+
 def _calcular_delta(objetivo: dict, consumido: dict) -> dict:
-    return {k: round(consumido[k] - objetivo[k], 1) for k in objetivo}
+    return {k: round(consumido[k] - objetivo[k], 1) for k in _MACRO_KEYS}
 
 
 def _leer_comidas_sync() -> list[dict]:
