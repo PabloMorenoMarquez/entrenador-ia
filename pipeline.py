@@ -38,6 +38,40 @@ from engine.parsear_comida import parsear_comida
 from rag.buscar_contexto import buscar_contexto
 
 
+async def _buscar_memoria_semantica(mensaje: str) -> str | None:
+    """
+    Búsqueda semántica en memoria Supabase. Solo entra lo relevante al mensaje actual.
+    Fallback silencioso a None → pipeline usará memoria de Sheets.
+    """
+    try:
+        from db.repositorio import buscar_memoria_semantica
+        resultado = await asyncio.to_thread(buscar_memoria_semantica, mensaje)
+        return resultado if resultado else None
+    except Exception as e:
+        print(f"[pipeline] Memoria semántica no disponible (fallback Sheets): {e}")
+        return None
+
+
+async def _guardar_memoria_con_fallback(entrada: dict) -> None:
+    """Guarda memoria en Supabase (semántica) con fallback a Sheets."""
+    try:
+        from db.repositorio import guardar_memoria_semantica
+        await asyncio.to_thread(guardar_memoria_semantica, entrada)
+    except Exception as e:
+        print(f"[pipeline] Fallback memoria a Sheets: {e}")
+        await guardar_memoria(entrada)
+
+
+async def _decay_memoria_combinado() -> None:
+    """Ejecuta decay en Supabase + Sheets (durante migración)."""
+    try:
+        from db.repositorio import decay_memoria_supabase
+        await asyncio.to_thread(decay_memoria_supabase)
+    except Exception as e:
+        print(f"[pipeline] Decay Supabase error (no crítico): {e}")
+    await decay_memoria()
+
+
 async def _leer_recuperacion_hoy() -> dict | None:
     """
     Lee check-in, biométricos y dolores activos de Supabase.
@@ -87,6 +121,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         leer_sheets(intencion["sheets_necesarias"]),  # idx 0
         leer_conversaciones(limite=10),               # idx 1
         _leer_recuperacion_hoy(),                     # idx 2: checkin + biometricos + dolores
+        _buscar_memoria_semantica(mensaje),           # idx 3: memoria relevante (Supabase)
     ]
     if es_registro_entreno:
         tasks_lectura.append(parsear_entreno(mensaje))
@@ -97,8 +132,13 @@ async def procesar_mensaje(mensaje: str) -> str:
     contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
     conversaciones = resultados_lectura[1] if not isinstance(resultados_lectura[1], Exception) else []
     recuperacion = resultados_lectura[2] if not isinstance(resultados_lectura[2], Exception) else None
+    memoria_semantica = resultados_lectura[3] if not isinstance(resultados_lectura[3], Exception) else None
 
-    datos_parse_raw = resultados_lectura[3] if (es_registro_entreno or es_registro_comida) else None
+    # Memoria semántica sobreescribe la de Sheets si está disponible
+    if memoria_semantica is not None:
+        contexto_usuario["memory"] = memoria_semantica
+
+    datos_parse_raw = resultados_lectura[4] if (es_registro_entreno or es_registro_comida) else None
     if isinstance(datos_parse_raw, Exception):
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
@@ -193,12 +233,12 @@ async def procesar_mensaje(mensaje: str) -> str:
         evaluar_y_guardar_memoria(
             mensaje_usuario=mensaje,
             respuesta_coach=respuesta,
-            guardar_fn=guardar_memoria,
+            guardar_fn=_guardar_memoria_con_fallback,
             memoria_existente=contexto_usuario.get("memory", ""),
         )
     )
 
-    # 8. Decay de memoria en background (expira entradas antiguas/baja prioridad)
-    asyncio.create_task(decay_memoria())
+    # 8. Decay de memoria en background (Supabase + Sheets durante migración)
+    asyncio.create_task(_decay_memoria_combinado())
 
     return respuesta
