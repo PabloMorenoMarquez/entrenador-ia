@@ -52,14 +52,18 @@ export default function BottomNav() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 3,
-            padding: '10px 0',
+            paddingTop: 10,
+            paddingBottom: 10,
             flex: 1,
             textDecoration: 'none',
-            color: isActive ? 'var(--accent-soft)' : 'var(--text-dim)',
+            color: isActive ? 'var(--accent)' : 'var(--text-dim)',
             fontSize: '0.68rem',
-            fontWeight: 500,
+            fontWeight: isActive ? 600 : 500,
             letterSpacing: '0.02em',
             transition: 'color 0.15s',
+            borderTop: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+            cursor: 'pointer',
+            minHeight: 52,
           })}
         >
           {icon}

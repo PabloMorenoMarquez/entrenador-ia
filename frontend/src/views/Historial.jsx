@@ -89,13 +89,19 @@ export default function Historial() {
                 </div>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   {s.duracion_min > 0 && (
-                    <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                      ⏱ {s.duracion_min} min
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                      </svg>
+                      {s.duracion_min} min
                     </span>
                   )}
                   {s.volumen_total_kg > 0 && (
-                    <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                      🏋️ {s.volumen_total_kg} kg
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 4v16M18 4v16M3 8h18M3 16h18"/>
+                      </svg>
+                      {s.volumen_total_kg} kg
                     </span>
                   )}
                 </div>

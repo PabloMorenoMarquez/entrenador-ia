@@ -5,14 +5,15 @@
   --bg-card: #0f0f1e;
   --bg-header: #0d0d18;
   --border: #1a1a2e;
-  --accent: #4f46e5;
-  --accent-light: #6366f1;
-  --accent-soft: #818cf8;
+  --accent: #f97316;
+  --accent-light: #fb923c;
+  --accent-soft: #fdba74;
   --text: #e2e8f0;
   --text-muted: #c8d4e8;
-  --text-dim: #3d4466;
+  --text-dim: #6b7a99;
   --green: #22c55e;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -30,10 +31,26 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font);
+  touch-action: manipulation;
+}
+
+a {
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .safe-bottom {
@@ -52,10 +69,25 @@ input, textarea, select {
   border: 1px solid var(--border);
   border-radius: 8px;
   outline: none;
+  transition: border-color 0.15s;
 }
 
 input:focus, textarea:focus {
   border-color: var(--accent);
+}
+
+/* clickable card hover — targets cards inside <a> links or with .card-hover class */
+a .card,
+.card-hover {
+  transition: border-color 0.15s, transform 0.12s;
+}
+a:hover .card,
+.card-hover:hover {
+  border-color: rgba(249, 115, 22, 0.35);
+}
+a:active .card,
+.card-hover:active {
+  transform: scale(0.985);
 }
 
 @keyframes fadeUp {
