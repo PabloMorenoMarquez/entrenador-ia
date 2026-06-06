@@ -36,13 +36,14 @@ def _obtener_ejercicios(cliente) -> dict:
     return ejercicios
 
 
-def _obtener_sesiones(cliente) -> list[dict]:
-    """Lee las últimas 5 sesiones para detectar señales de sobreentrenamiento."""
+def _obtener_sesiones(cliente, limite: int = 20) -> list[dict]:
+    """Lee las últimas N sesiones. Ventana ampliada para análisis de largo plazo."""
     filas = _leer_hoja_sync(cliente, "historial_entrenamientos")
-    ultimas = filas[-5:] if len(filas) >= 5 else filas
+    ultimas = filas[-limite:] if len(filas) >= limite else filas
 
     return [
         {
+            "fecha":          fila.get("FECHA", ""),
             "nivel_energia":  int(fila.get("NIVEL_ENERGIA_1_5", 3) or 3),
             "nivel_esfuerzo": int(fila.get("NIVEL_ESFUERZO_1_10", 5) or 5),
             "duracion_min":   int(fila.get("DURACION_MIN", 60) or 60),
@@ -71,19 +72,55 @@ def _extraer_objetivo(contexto_usuario: dict) -> str:
 def analizar_entrenamiento(contexto_usuario: dict = None) -> dict:
     """
     Función principal que usa el pipeline.
-    Lee ejercicios_detalle e historial de Sheets, genera y devuelve el informe.
-    El objetivo se extrae del contexto_usuario (sheet 'objetivos') en vez de hardcode.
+    Lee ejercicios_detalle e historial de Sheets, genera el informe del motor
+    y añade contexto de periodización (mesociclo actual + estancamiento largo plazo).
     """
     try:
         objetivo = _extraer_objetivo(contexto_usuario)
         cliente = conectar()
         ejercicios = _obtener_ejercicios(cliente)
-        sesiones = _obtener_sesiones(cliente)
+        sesiones = _obtener_sesiones(cliente, limite=20)
 
         if not ejercicios:
             return {"resumen": ["Sin datos de entrenamiento registrados."]}
 
-        return generar_informe(ejercicios, sesiones, objetivo=objetivo)
+        # Informe base del motor reactivo (últimas 5 sesiones por ejercicio)
+        informe = generar_informe(ejercicios, sesiones[-5:], objetivo=objetivo)
+
+        # Periodización: plan activo + transición si procede
+        try:
+            from engine.periodizacion import (
+                obtener_o_crear_plan,
+                evaluar_transicion,
+                aplicar_transicion,
+                analizar_estancamiento_largo,
+                resumen_periodizacion,
+            )
+            plan = obtener_o_crear_plan(objetivo)
+            estado_global = informe.get("estado_global") or {}
+
+            # Verificar si toca transición de fase
+            decision = evaluar_transicion(plan, estado_global, objetivo)
+            if decision in ("deload_urgente", "transicion_programada"):
+                plan = aplicar_transicion(plan, objetivo, motivo=decision)
+
+            # Estancamiento a largo plazo (ventana ampliada: 5 semanas)
+            estancados = analizar_estancamiento_largo(ejercicios)
+
+            # Añadir contexto de periodización al informe
+            informe["periodizacion"] = {
+                "fase": plan.get("fase"),
+                "semana_inicio": plan.get("semana_inicio"),
+                "duracion_semanas": plan.get("duracion_semanas"),
+                "objetivo_volumen": plan.get("objetivo_volumen"),
+                "estancados_largo_plazo": estancados,
+                "resumen_texto": resumen_periodizacion(plan, objetivo, estancados),
+            }
+
+        except Exception as e_peri:
+            print(f"[analizar_entrenamiento] Periodización no disponible (no crítico): {e_peri}")
+
+        return informe
 
     except Exception as e:
         print(f"[analizar_entrenamiento] Error: {e}")

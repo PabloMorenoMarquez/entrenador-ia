@@ -114,7 +114,7 @@ def construir_sistema(
             else:
                 directivas.append(f"RECUPERACIÓN HOY: {resumen_rec}.")
 
-    # Estado global del motor de entrenamiento
+    # Estado global del motor de entrenamiento + periodización
     if motor_output:
         estado_g = motor_output.get("estado_global") or {}
         score = estado_g.get("score_global", 50)
@@ -129,6 +129,29 @@ def construir_sistema(
                 f"ANÁLISIS MOTOR: {estado} (score {score}/100). "
                 "Mantén cargas conservadoras."
             )
+
+        # Directiva de fase del mesociclo
+        peri = motor_output.get("periodizacion") or {}
+        fase = peri.get("fase")
+        if fase:
+            from engine.motor_decision import UMBRALES
+            if fase == "deload":
+                directivas.append(
+                    "FASE DELOAD activa: reduce volumen al 50%, mantén intensidad moderada. "
+                    "No persig progresión esta semana."
+                )
+            elif fase == "fuerza":
+                rir_obj = UMBRALES.get("fuerza", {}).get("rir_optimo", 3)
+                directivas.append(
+                    f"FASE FUERZA: prioriza cargas altas (RIR objetivo {rir_obj}), "
+                    "volumen bajo (6-10 series/grupo). Progresión de carga > volumen."
+                )
+            elif fase == "hipertrofia":
+                rir_obj = UMBRALES.get("hipertrofia", {}).get("rir_optimo", 2)
+                directivas.append(
+                    f"FASE HIPERTROFIA: volumen moderado-alto (14-20 series/grupo), "
+                    f"RIR objetivo {rir_obj}. Progresión progresiva semana a semana."
+                )
 
     # Ensamblar sistema
     bloques = [intro]
@@ -240,6 +263,12 @@ def construir_prompt(
         texto_motor = _formatear_motor(motor_output)
         if texto_motor:
             bloques.append(f"## Análisis de entrenamiento\n{texto_motor}")
+
+        # Periodización: fase actual, objetivo de volumen, estancados
+        peri = motor_output.get("periodizacion") or {}
+        resumen_peri = peri.get("resumen_texto", "")
+        if resumen_peri:
+            bloques.append(f"## Plan de entrenamiento (mesociclo)\n{resumen_peri}")
 
     # --- Contexto científico del RAG (solo si se consultó) ---
     if rag_context and rag_context.strip():
