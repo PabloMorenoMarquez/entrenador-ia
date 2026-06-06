@@ -290,6 +290,66 @@ async def get_dolores_activos():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---- Endpoints Fase 5: plan nutricional con timing ----
+
+@app.get("/api/nutricion/timing")
+async def get_nutricion_timing(recalcular: bool = False):
+    """
+    Retorna el plan nutricional de hoy con timing por toma.
+    Si no existe o recalcular=true, lo genera con el LLM.
+    El LLM ancla las comidas a la hora de entrenamiento del día.
+    """
+    try:
+        from db.repositorio import (
+            leer_plan_nutricional_hoy, guardar_plan_nutricional,
+            leer_cronotipo,
+        )
+        from engine.calcular_macros import (
+            calcular_timing_nutricional, _extraer_hora_entreno_hoy,
+        )
+        from memory.lectura_estructurada import leer_nutricion_hoy, leer_perfil
+
+        plan = None if recalcular else await asyncio.to_thread(leer_plan_nutricional_hoy)
+
+        if not plan:
+            # Leer macros objetivo + contexto del usuario en paralelo
+            nutricion_hoy, perfil, cronotipo = await asyncio.gather(
+                leer_nutricion_hoy(),
+                leer_perfil(),
+                asyncio.to_thread(leer_cronotipo),
+                return_exceptions=True,
+            )
+            macros_obj = {}
+            if not isinstance(nutricion_hoy, Exception):
+                macros_obj = nutricion_hoy.get("objetivo") or {}
+            if not macros_obj.get("kcal"):
+                macros_obj = {"kcal": 2200, "proteinas_g": 160, "carbos_g": 240, "grasas_g": 75}
+
+            # Extraer hora de entreno de hoy desde el perfil
+            dias_txt = (perfil or {}).get("dias_tipicos", "") if not isinstance(perfil, Exception) else ""
+            plan_txt = (perfil or {}).get("plan_semanal", "") if not isinstance(perfil, Exception) else ""
+            hora_entreno = _extraer_hora_entreno_hoy(dias_txt or "", plan_txt or "")
+
+            crono = cronotipo if isinstance(cronotipo, str) else None
+
+            timing = await calcular_timing_nutricional(macros_obj, hora_entreno, crono)
+
+            tomas = timing.get("tomas") or []
+            notas = timing.get("notas") or ""
+            await asyncio.to_thread(guardar_plan_nutricional, tomas, hora_entreno, notas)
+
+            plan = {
+                "fecha": timing.get("fecha"),
+                "hora_entreno": hora_entreno,
+                "tomas": tomas,
+                "notas": notas,
+            }
+
+        return plan
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---- Catch-all para BrowserRouter (debe ir al final) ----
 
 @app.get("/{full_path:path}", include_in_schema=False)

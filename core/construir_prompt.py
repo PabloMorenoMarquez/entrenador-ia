@@ -171,6 +171,7 @@ def construir_prompt(
     comida_registrada: Optional[dict] = None,
     macros_recalculados: Optional[dict] = None,
     recuperacion: Optional[dict] = None,
+    plan_nutricional: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -257,6 +258,33 @@ def construir_prompt(
         if notas:
             texto += f" {notas}"
         bloques.append(f"## Macros objetivo recalculados\n{texto}")
+
+    # --- Plan nutricional con timing (Fase 5) ---
+    if plan_nutricional:
+        tomas = plan_nutricional.get("tomas") or []
+        hora_entreno = plan_nutricional.get("hora_entreno") or ""
+        notas_plan = plan_nutricional.get("notas") or ""
+        if tomas:
+            lineas_plan = []
+            if hora_entreno:
+                lineas_plan.append(f"Entreno hoy: {hora_entreno}")
+            for t in tomas:
+                nombre = t.get("nombre", "Toma")
+                hora = t.get("hora", "")
+                proposito = t.get("proposito", "")
+                kcal_t = t.get("kcal", "")
+                p_t = t.get("proteinas_g", "")
+                c_t = t.get("carbos_g", "")
+                g_t = t.get("grasas_g", "")
+                ejemplos = t.get("ejemplos") or []
+                tag = f" [{proposito}]" if proposito else ""
+                macros_str = f"{kcal_t}kcal | P{p_t}g C{c_t}g G{g_t}g"
+                lineas_plan.append(f"{hora} {nombre}{tag}: {macros_str}")
+                if ejemplos:
+                    lineas_plan.append(f"  Ej: {', '.join(ejemplos[:2])}")
+            if notas_plan:
+                lineas_plan.append(f"Nota: {notas_plan}")
+            bloques.append("## Plan nutricional de hoy\n" + "\n".join(lineas_plan))
 
     # --- Análisis del motor (solo si se ejecutó) ---
     if motor_output:

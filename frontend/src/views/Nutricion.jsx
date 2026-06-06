@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getNutricionHoy, getNutricionSemana } from '../api/client'
+import { getNutricionHoy, getNutricionSemana, getNutricionTiming } from '../api/client'
 import Card from '../components/Card'
 import Loading from '../components/Loading'
 import ErrorState from '../components/ErrorState'
@@ -100,9 +100,56 @@ function SemanaChart({ dias, objetivo }) {
   )
 }
 
+const PROPOSITO_LABEL = {
+  inicio_dia: 'Inicio del día',
+  pre_entreno: '⚡ Pre-entreno',
+  post_entreno: '💪 Post-entreno',
+  media_manana: 'Media mañana',
+  almuerzo: 'Almuerzo',
+  merienda: 'Merienda',
+  cena: 'Cena',
+}
+
+const PROPOSITO_COLOR = {
+  pre_entreno: '#f59e0b',
+  post_entreno: '#34d399',
+}
+
+function TomaPlan({ toma }) {
+  const color = PROPOSITO_COLOR[toma.proposito]
+  const label = PROPOSITO_LABEL[toma.proposito] || toma.nombre
+  return (
+    <Card style={{ marginBottom: 8, borderLeft: color ? `3px solid ${color}` : undefined }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, fontSize: '0.92rem' }}>{toma.hora}</span>
+            <span style={{ fontSize: '0.85rem', color: color || 'var(--text-muted)', fontWeight: 500 }}>
+              {label}
+            </span>
+          </div>
+          {toma.ejemplos?.length > 0 && (
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 3 }}>
+              {toma.ejemplos.slice(0, 2).join(' · ')}
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{toma.kcal} kcal</div>
+          <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+            P{toma.proteinas_g} C{toma.carbos_g} G{toma.grasas_g}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Nutricion() {
   const [hoy, setHoy] = useState(null)
   const [semana, setSemana] = useState(null)
+  const [timing, setTiming] = useState(null)
+  const [timingLoading, setTimingLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -117,6 +164,25 @@ export default function Nutricion() {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+    // Timing carga en paralelo sin bloquear el resto
+    try {
+      const t = await getNutricionTiming()
+      if (t?.tomas?.length > 0) setTiming(t)
+    } catch {
+      // No crítico — se omite sin error visible
+    }
+  }
+
+  const generarPlan = async () => {
+    setTimingLoading(true)
+    try {
+      const t = await getNutricionTiming(true)
+      if (t?.tomas?.length > 0) setTiming(t)
+    } catch (e) {
+      console.error('Error generando plan:', e)
+    } finally {
+      setTimingLoading(false)
     }
   }
 
@@ -135,6 +201,56 @@ export default function Nutricion() {
       <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', margin: '0 0 20px' }}>
         Hoy · {hoy.fecha}
       </p>
+
+      {/* Plan nutricional con timing */}
+      {timing ? (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <h2 style={{ fontSize: '0.9rem', fontWeight: 600, margin: 0, color: 'var(--text-muted)' }}>
+              Plan de comidas de hoy
+              {timing.hora_entreno && (
+                <span style={{ color: 'var(--text-dim)', fontWeight: 400, marginLeft: 8 }}>
+                  · entreno {timing.hora_entreno}
+                </span>
+              )}
+            </h2>
+            <button
+              onClick={generarPlan}
+              disabled={timingLoading}
+              style={{
+                background: 'none', border: '1px solid var(--border)',
+                color: 'var(--text-dim)', borderRadius: 6, padding: '3px 10px',
+                fontSize: '0.75rem', cursor: 'pointer', opacity: timingLoading ? 0.5 : 1,
+              }}
+            >
+              {timingLoading ? '...' : 'Regenerar'}
+            </button>
+          </div>
+          {timing.tomas.map((t, i) => <TomaPlan key={i} toma={t} />)}
+          {timing.notas && (
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.78rem', margin: '8px 4px 0' }}>
+              {timing.notas}
+            </p>
+          )}
+        </div>
+      ) : (
+        <Card style={{ marginBottom: 16, textAlign: 'center', padding: '16px' }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: '0 0 10px' }}>
+            Sin plan de comidas generado para hoy
+          </p>
+          <button
+            onClick={generarPlan}
+            disabled={timingLoading}
+            style={{
+              background: 'var(--accent)', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '8px 18px', fontSize: '0.85rem',
+              cursor: 'pointer', opacity: timingLoading ? 0.6 : 1,
+            }}
+          >
+            {timingLoading ? 'Generando...' : 'Generar plan de hoy'}
+          </button>
+        </Card>
+      )}
 
       <Card style={{ marginBottom: 12 }}>
         <KcalRing consumido={consumido.kcal} objetivo={objetivo.kcal} />

@@ -362,3 +362,61 @@ def leer_dolores_hoy() -> list[dict]:
         .execute()
     )
     return result.data or []
+
+
+# ─────────────────────────────────────────
+# PLAN NUTRICIONAL CON TIMING (Fase 5)
+# ─────────────────────────────────────────
+
+def guardar_plan_nutricional(
+    tomas: list,
+    hora_entreno: Optional[str] = None,
+    notas: str = "",
+    fecha: Optional[str] = None,
+) -> dict:
+    """Upsert del plan nutricional del día."""
+    sb = get_client()
+    uid = get_user_id()
+    payload = {
+        "user_id": uid,
+        "fecha": fecha or date.today().isoformat(),
+        "hora_entreno": hora_entreno,
+        "tomas": tomas,
+        "notas": notas,
+        "generado_por": "llm",
+    }
+    result = (
+        sb.table("plan_nutricional")
+        .upsert(payload, on_conflict="user_id,fecha")
+        .execute()
+    )
+    return result.data[0] if result.data else {}
+
+
+def leer_plan_nutricional_hoy() -> Optional[dict]:
+    """Retorna el plan nutricional de hoy o None si no existe."""
+    sb = get_client()
+    uid = get_user_id()
+    hoy = date.today().isoformat()
+    result = (
+        sb.table("plan_nutricional")
+        .select("*")
+        .eq("user_id", uid)
+        .eq("fecha", hoy)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def leer_cronotipo() -> Optional[str]:
+    """Retorna el cronotipo del usuario (matutino/vespertino/intermedio)."""
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("cronotipo")
+        .select("tipo")
+        .eq("user_id", uid)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0]["tipo"] if result.data else None

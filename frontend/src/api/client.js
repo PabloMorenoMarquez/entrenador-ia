@@ -30,3 +30,7 @@ export const getMedidas = () => apiFetch('/api/medidas')
 export const postHidratacion = (litros) => apiFetch('/api/hidratacion', { method: 'POST', body: JSON.stringify({ litros }) })
 export const postDolor = (datos) => apiFetch('/api/dolor', { method: 'POST', body: JSON.stringify(datos) })
 export const getDoloresActivos = () => apiFetch('/api/dolor/activos')
+
+// Fase 5: plan nutricional con timing
+export const getNutricionTiming = (recalcular = false) =>
+  apiFetch(`/api/nutricion/timing${recalcular ? '?recalcular=true' : ''}`)

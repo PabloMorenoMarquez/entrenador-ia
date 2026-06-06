@@ -72,6 +72,16 @@ async def _decay_memoria_combinado() -> None:
     await decay_memoria()
 
 
+async def _leer_plan_nutricional() -> dict | None:
+    """Lee el plan nutricional de hoy (ya generado) desde Supabase. No genera si no existe."""
+    try:
+        from db.repositorio import leer_plan_nutricional_hoy
+        return await asyncio.to_thread(leer_plan_nutricional_hoy)
+    except Exception as e:
+        print(f"[pipeline] Plan nutricional no disponible (no crítico): {e}")
+        return None
+
+
 async def _leer_recuperacion_hoy() -> dict | None:
     """
     Lee check-in, biométricos y dolores activos de Supabase.
@@ -122,11 +132,12 @@ async def procesar_mensaje(mensaje: str) -> str:
         leer_conversaciones(limite=10),               # idx 1
         _leer_recuperacion_hoy(),                     # idx 2: checkin + biometricos + dolores
         _buscar_memoria_semantica(mensaje),           # idx 3: memoria relevante (Supabase)
+        _leer_plan_nutricional(),                     # idx 4: timing nutricional de hoy
     ]
     if es_registro_entreno:
-        tasks_lectura.append(parsear_entreno(mensaje))
+        tasks_lectura.append(parsear_entreno(mensaje))   # idx 5
     elif es_registro_comida:
-        tasks_lectura.append(parsear_comida(mensaje))
+        tasks_lectura.append(parsear_comida(mensaje))    # idx 5
 
     resultados_lectura = await asyncio.gather(*tasks_lectura, return_exceptions=True)
     contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
@@ -138,7 +149,9 @@ async def procesar_mensaje(mensaje: str) -> str:
     if memoria_semantica is not None:
         contexto_usuario["memory"] = memoria_semantica
 
-    datos_parse_raw = resultados_lectura[4] if (es_registro_entreno or es_registro_comida) else None
+    plan_nutricional = resultados_lectura[4] if not isinstance(resultados_lectura[4], Exception) else None
+
+    datos_parse_raw = resultados_lectura[5] if (es_registro_entreno or es_registro_comida) else None
     if isinstance(datos_parse_raw, Exception):
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
@@ -213,6 +226,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         comida_registrada=comida_registrada,
         macros_recalculados=macros_recalculados,
         recuperacion=recuperacion,
+        plan_nutricional=plan_nutricional,
     )
 
     # 5. Llamar al LLM principal con fallback automático
