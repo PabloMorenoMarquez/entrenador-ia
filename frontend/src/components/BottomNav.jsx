@@ -7,9 +7,9 @@ const tabs = [
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
   )},
-  { to: '/rutina', label: 'Rutina', icon: (
+  { to: '/checkin', label: 'Check-in', icon: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 4v16M18 4v16M3 8h18M3 16h18"/>
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
     </svg>
   )},
   { to: '/nutricion', label: 'Nutrición', icon: (

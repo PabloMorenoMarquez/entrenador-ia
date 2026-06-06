@@ -38,6 +38,35 @@ from engine.parsear_comida import parsear_comida
 from rag.buscar_contexto import buscar_contexto
 
 
+async def _leer_recuperacion_hoy() -> dict | None:
+    """
+    Lee check-in, biométricos y dolores activos de Supabase.
+    Devuelve dict combinado o None si Supabase no está disponible.
+    """
+    try:
+        from db.repositorio import leer_checkin_hoy, leer_biometricos_hoy, leer_dolores_activos
+        checkin, biometricos, dolores = await asyncio.gather(
+            asyncio.to_thread(leer_checkin_hoy),
+            asyncio.to_thread(leer_biometricos_hoy),
+            asyncio.to_thread(leer_dolores_activos),
+            return_exceptions=True,
+        )
+        resultado: dict = {}
+        if checkin and not isinstance(checkin, Exception):
+            resultado.update({k: v for k, v in checkin.items() if v is not None})
+        if biometricos and not isinstance(biometricos, Exception):
+            # Campos objetivos del Watch complementan el checkin subjetivo
+            for campo in ("sueno_horas", "fc_reposo", "hrv", "spo2", "pasos"):
+                if biometricos.get(campo) is not None:
+                    resultado[campo] = biometricos[campo]
+        if dolores and not isinstance(dolores, Exception):
+            resultado["dolores_activos"] = dolores
+        return resultado if resultado else None
+    except Exception as e:
+        print(f"[pipeline] Recuperación Supabase no disponible (no crítico): {e}")
+        return None
+
+
 async def procesar_mensaje(mensaje: str) -> str:
     """
     Punto de entrada principal del pipeline.
@@ -55,8 +84,9 @@ async def procesar_mensaje(mensaje: str) -> str:
     es_recalcular_macros = intencion.get("tipo") == "recalcular_macros"
 
     tasks_lectura = [
-        leer_sheets(intencion["sheets_necesarias"]),
-        leer_conversaciones(limite=10),
+        leer_sheets(intencion["sheets_necesarias"]),  # idx 0
+        leer_conversaciones(limite=10),               # idx 1
+        _leer_recuperacion_hoy(),                     # idx 2: checkin + biometricos + dolores
     ]
     if es_registro_entreno:
         tasks_lectura.append(parsear_entreno(mensaje))
@@ -66,8 +96,9 @@ async def procesar_mensaje(mensaje: str) -> str:
     resultados_lectura = await asyncio.gather(*tasks_lectura, return_exceptions=True)
     contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
     conversaciones = resultados_lectura[1] if not isinstance(resultados_lectura[1], Exception) else []
+    recuperacion = resultados_lectura[2] if not isinstance(resultados_lectura[2], Exception) else None
 
-    datos_parse_raw = resultados_lectura[2] if (es_registro_entreno or es_registro_comida) else None
+    datos_parse_raw = resultados_lectura[3] if (es_registro_entreno or es_registro_comida) else None
     if isinstance(datos_parse_raw, Exception):
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
@@ -141,6 +172,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         entreno_registrado=entreno_registrado,
         comida_registrada=comida_registrada,
         macros_recalculados=macros_recalculados,
+        recuperacion=recuperacion,
     )
 
     # 5. Llamar al LLM principal con fallback automático

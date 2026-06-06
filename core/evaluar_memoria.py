@@ -92,6 +92,7 @@ async def evaluar_y_guardar_memoria(
             ],
             modelos=MODELOS_MEMORIA,
             max_tokens=150,
+            response_format={"type": "json_object"},
         )
 
         resultado = _extraer_json(respuesta)

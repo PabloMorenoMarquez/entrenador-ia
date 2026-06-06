@@ -3,11 +3,13 @@ API principal del entrenador IA.
 Punto de entrada HTTP para todas las peticiones.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from typing import Optional
 import os
+import asyncio
 
 from pipeline import procesar_mensaje
 
@@ -30,6 +32,65 @@ class ChatResponse(BaseModel):
 
 class PerfilUpdateRequest(BaseModel):
     campos: dict
+
+
+# ---- Modelos Fase 1: recuperación y biométricos ----
+
+class BiometricosRequest(BaseModel):
+    fecha: Optional[str] = None
+    fuente: str = "manual"
+    # Sueño
+    sueno_horas: Optional[float] = None
+    sueno_calidad: Optional[int] = None
+    hora_acostarse: Optional[str] = None
+    hora_despertar: Optional[str] = None
+    rem_min: Optional[int] = None
+    profundo_min: Optional[int] = None
+    # Watch / sensores
+    fc_reposo: Optional[int] = None
+    hrv: Optional[int] = None
+    spo2: Optional[float] = None
+    pasos: Optional[int] = None
+    estres: Optional[int] = None
+    kcal_activas: Optional[int] = None
+
+
+class CheckinRequest(BaseModel):
+    fecha: Optional[str] = None
+    fatiga: Optional[int] = None          # 1-5
+    dolor_muscular: Optional[int] = None  # 1-5
+    calidad_sueno: Optional[int] = None   # 1-5
+    estado_mental: Optional[int] = None   # 1-5
+    notas: Optional[str] = None
+
+
+class MedidasRequest(BaseModel):
+    fecha: Optional[str] = None
+    peso_kg: Optional[float] = None
+    cintura_cm: Optional[float] = None
+    pecho_cm: Optional[float] = None
+    brazo_cm: Optional[float] = None
+    pierna_cm: Optional[float] = None
+    grasa_pct: Optional[float] = None
+
+
+class HidratacionRequest(BaseModel):
+    litros: float
+    fecha: Optional[str] = None
+
+
+class DolorRequest(BaseModel):
+    zona: str
+    intensidad: int   # 0-10
+    notas: Optional[str] = ""
+    fecha: Optional[str] = None
+
+
+def _validar_api_key(x_api_key: Optional[str]) -> None:
+    """Valida API key para endpoints sensibles (Watch, app Android)."""
+    expected = os.environ.get("API_KEY", "")
+    if expected and x_api_key != expected:
+        raise HTTPException(status_code=401, detail="API key inválida.")
 
 
 # ---- Rutas chat ----
@@ -123,6 +184,108 @@ async def get_historial():
     try:
         from memory.lectura_estructurada import leer_historial
         return await leer_historial()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---- Endpoints Fase 1: biométricos, check-in, medidas, hidratación, dolor ----
+
+@app.post("/api/biometricos")
+async def post_biometricos(
+    request: BiometricosRequest,
+    x_api_key: Optional[str] = Header(default=None),
+):
+    """Guarda biométricos (manual o Watch). Auth por X-API-Key cuando viene del Watch."""
+    _validar_api_key(x_api_key)
+    try:
+        from db.repositorio import guardar_biometricos
+        datos = {k: v for k, v in request.model_dump().items() if v is not None}
+        result = await asyncio.to_thread(guardar_biometricos, datos)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/biometricos/hoy")
+async def get_biometricos_hoy():
+    try:
+        from db.repositorio import leer_biometricos_hoy
+        data = await asyncio.to_thread(leer_biometricos_hoy)
+        return data or {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/checkin")
+async def post_checkin(request: CheckinRequest):
+    try:
+        from db.repositorio import guardar_checkin
+        datos = {k: v for k, v in request.model_dump().items() if v is not None}
+        result = await asyncio.to_thread(guardar_checkin, datos)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/checkin/hoy")
+async def get_checkin_hoy():
+    try:
+        from db.repositorio import leer_checkin_hoy
+        data = await asyncio.to_thread(leer_checkin_hoy)
+        return data or {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/medidas")
+async def post_medidas(request: MedidasRequest):
+    try:
+        from db.repositorio import guardar_medidas
+        datos = {k: v for k, v in request.model_dump().items() if v is not None}
+        result = await asyncio.to_thread(guardar_medidas, datos)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/medidas")
+async def get_medidas():
+    try:
+        from db.repositorio import leer_medidas_recientes
+        data = await asyncio.to_thread(leer_medidas_recientes)
+        return {"medidas": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/hidratacion")
+async def post_hidratacion(request: HidratacionRequest):
+    try:
+        from db.repositorio import guardar_hidratacion
+        result = await asyncio.to_thread(guardar_hidratacion, request.litros, request.fecha)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/dolor")
+async def post_dolor(request: DolorRequest):
+    try:
+        from db.repositorio import registrar_dolor
+        result = await asyncio.to_thread(
+            registrar_dolor, request.zona, request.intensidad, request.notas or "", request.fecha
+        )
+        return {"ok": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/dolor/activos")
+async def get_dolores_activos():
+    try:
+        from db.repositorio import leer_dolores_activos
+        data = await asyncio.to_thread(leer_dolores_activos)
+        return {"dolores": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

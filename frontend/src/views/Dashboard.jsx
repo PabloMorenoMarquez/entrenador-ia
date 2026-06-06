@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getNutricionHoy, getRutina, getHistorial } from '../api/client'
+import { getNutricionHoy, getRutina, getHistorial, getCheckinHoy } from '../api/client'
 import Card from '../components/Card'
 import Loading from '../components/Loading'
 
@@ -15,10 +15,17 @@ function StatRow({ label, value, unit }) {
   )
 }
 
+function RecoveryDot({ val, max = 5 }) {
+  const pct = val / max
+  const color = pct >= 0.7 ? '#22c55e' : pct >= 0.45 ? '#eab308' : '#ef4444'
+  return <span style={{ color, fontWeight: 700 }}>{val}/{max}</span>
+}
+
 export default function Dashboard() {
   const [nutricion, setNutricion] = useState(null)
   const [rutina, setRutina] = useState(null)
   const [historial, setHistorial] = useState(null)
+  const [checkin, setCheckin] = useState(null)
   const [loadingNut, setLoadingNut] = useState(true)
   const [loadingRut, setLoadingRut] = useState(true)
   const [loadingHist, setLoadingHist] = useState(true)
@@ -27,6 +34,7 @@ export default function Dashboard() {
     getNutricionHoy().then(setNutricion).catch(() => {}).finally(() => setLoadingNut(false))
     getRutina().then(setRutina).catch(() => {}).finally(() => setLoadingRut(false))
     getHistorial().then(setHistorial).catch(() => {}).finally(() => setLoadingHist(false))
+    getCheckinHoy().then(d => { if (d && d.fatiga) setCheckin(d) }).catch(() => {})
   }, [])
 
   const ultimaSesion = historial?.sesiones?.[0]
@@ -36,6 +44,41 @@ export default function Dashboard() {
       <h1 style={{ fontSize: '1.2rem', fontWeight: 600, margin: '0 0 20px', color: 'var(--text)' }}>
         Dashboard
       </h1>
+
+      {/* Recuperación hoy */}
+      <Link to="/checkin" style={{ textDecoration: 'none' }}>
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Recuperación hoy
+            </h2>
+            <span style={{ color: 'var(--accent-soft)', fontSize: '0.75rem' }}>
+              {checkin ? 'Registrado' : 'Registrar →'}
+            </span>
+          </div>
+          {checkin ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, textAlign: 'center' }}>
+              {[
+                { label: 'Fatiga', val: checkin.fatiga },
+                { label: 'Sueño', val: checkin.calidad_sueno },
+                { label: 'Dolor', val: checkin.dolor_muscular },
+                { label: 'Mental', val: checkin.estado_mental },
+              ].map(({ label, val }) => (
+                <div key={label} style={{ background: 'var(--bg)', borderRadius: 8, padding: '8px 4px' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>
+                    {val ? <RecoveryDot val={val} /> : '—'}
+                  </div>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '0.68rem', marginTop: 2 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>
+              Sin check-in de hoy — toca para registrar
+            </p>
+          )}
+        </Card>
+      </Link>
 
       {/* Macros hoy */}
       <Link to="/nutricion" style={{ textDecoration: 'none' }}>

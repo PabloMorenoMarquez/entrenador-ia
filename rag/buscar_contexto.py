@@ -3,12 +3,15 @@ import hashlib
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI
-from supabase import create_client
+from db.supabase_client import get_client
 
 load_dotenv()
 
 openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+
+def _sb():
+    return get_client()
 
 LIBROS_POR_CATEGORIA = {
     "entrenamiento": [
@@ -112,7 +115,7 @@ def traducir_chunks(docs: list[dict]) -> dict[str, str]:
     traducciones: dict[str, str] = {}
     try:
         resultado = (
-            supabase.table("traducciones_cache")
+            _sb().table("traducciones_cache")
             .select("chunk_hash,texto_traducido")
             .in_("chunk_hash", hashes)
             .execute()
@@ -130,7 +133,7 @@ def traducir_chunks(docs: list[dict]) -> dict[str, str]:
             traducido = _traducir_con_llm(texto_original)
             traducciones[h] = traducido
             # Guardar en caché
-            supabase.table("traducciones_cache").insert({
+            _sb().table("traducciones_cache").insert({
                 "chunk_hash": h,
                 "texto_original": texto_original,
                 "texto_traducido": traducido,
@@ -151,7 +154,7 @@ def buscar_contexto(pregunta, num_resultados=5):
     )
     embedding_pregunta = response.data[0].embedding
 
-    resultados = supabase.rpc("buscar_documentos", {
+    resultados = _sb().rpc("buscar_documentos", {
         "query_embedding": embedding_pregunta,
         "match_count": 20,
     }).execute()

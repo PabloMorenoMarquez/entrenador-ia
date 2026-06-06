@@ -42,26 +42,33 @@ async def llamar_llm(
     mensajes: list[dict],
     modelos: list[str],
     max_tokens: int = 1000,
-    pausa_entre_intentos: float = 1.0
+    pausa_entre_intentos: float = 1.0,
+    response_format: dict | None = None,
 ) -> str:
     """
     Llama al primer modelo disponible de la lista.
     Si devuelve 429, espera un momento y prueba el siguiente.
     Lanza excepción solo si todos los modelos fallan.
+
+    response_format: p.ej. {"type": "json_object"} para forzar JSON.
+    No todos los modelos de OpenRouter lo soportan; si falla, reintenta sin él.
     """
     ultimo_error = None
 
     for modelo in modelos:
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
+                body: dict = {
+                    "model": modelo,
+                    "max_tokens": max_tokens,
+                    "messages": mensajes,
+                }
+                if response_format:
+                    body["response_format"] = response_format
                 response = await client.post(
                     OPENROUTER_URL,
                     headers=_get_headers(),
-                    json={
-                        "model": modelo,
-                        "max_tokens": max_tokens,
-                        "messages": mensajes,
-                    }
+                    json=body,
                 )
 
                 if response.status_code == 429:

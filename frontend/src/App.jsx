@@ -6,6 +6,7 @@ import Nutricion from './views/Nutricion'
 import Historial from './views/Historial'
 import Perfil from './views/Perfil'
 import Chat from './views/Chat'
+import Checkin from './views/Checkin'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/historial" element={<Historial />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/checkin" element={<Checkin />} />
           <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
       </main>

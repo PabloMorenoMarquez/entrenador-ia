@@ -73,6 +73,7 @@ async def parsear_comida(mensaje: str) -> dict | None:
             ],
             modelos=MODELOS_INTENCION,
             max_tokens=800,
+            response_format={"type": "json_object"},
         )
         return _extraer_json(respuesta)
     except Exception as e:

@@ -56,6 +56,7 @@ async def calcular_macros_objetivo(perfil: dict) -> dict:
         ],
         modelos=MODELOS_PRINCIPAL,
         max_tokens=300,
+        response_format={"type": "json_object"},
     )
 
     macros = _extraer_json_macros(respuesta)

@@ -77,6 +77,7 @@ async def parsear_entreno(mensaje: str) -> dict | None:
             ],
             modelos=MODELOS_INTENCION,
             max_tokens=600,
+            response_format={"type": "json_object"},
         )
         return _extraer_json(respuesta)
     except Exception as e:

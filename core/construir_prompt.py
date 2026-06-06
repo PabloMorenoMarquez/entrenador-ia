@@ -4,20 +4,138 @@ Solo incluye los bloques de contexto que son relevantes para la petición actual
 El conocimiento técnico NO va aquí — viene del RAG cuando se necesita.
 """
 
+import re
 from typing import Optional
 
-# Sistema base: corto y directo
-# Sin conocimiento hardcodeado — para eso está el RAG
-SISTEMA_BASE = """Eres Coach IA, entrenador personal y nutricionista deportivo. \
-Respondes en español con precisión técnica y tono profesional.
-
-Reglas:
+_REGLAS_FIJAS = """Reglas:
 - Si no tienes un dato necesario para una recomendación precisa, pregunta. Nunca inventes.
 - Si usas una estimación, indícalo: "Estimación basada en [criterio]:".
 - Máximo 1-2 preguntas por mensaje cuando las necesites.
 - Cuando tengas suficiente información, actúa directamente sin preámbulos.
 - No uses emojis excesivos ni frases motivacionales vacías.
 - Si el contexto incluye "Entrenamiento que acaba de registrar" o "Comida que acaba de registrar", confirma explícitamente al inicio que ha quedado guardado antes de dar feedback."""
+
+
+def _extraer_campo(texto: str, *patrones: str) -> str:
+    """Extrae el valor de un campo clave:valor del texto de perfil."""
+    patron_combinado = "|".join(patrones)
+    match = re.search(
+        rf'(?:^|\n)\s*(?:{patron_combinado})\s*[:\|]\s*(.+?)(?:\n|$)',
+        texto,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def _extraer_limitaciones(memoria_txt: str) -> str:
+    """Extrae limitaciones físicas activas de la memoria del usuario."""
+    if not memoria_txt:
+        return ""
+    limitaciones = []
+    for linea in memoria_txt.split("\n"):
+        linea_lower = linea.lower()
+        if any(kw in linea_lower for kw in [
+            "limitacion", "limitación", "lesion", "lesión",
+            "dolor", "medico", "médico", "no puede", "evitar",
+        ]):
+            # Intentar extraer el campo contenido de la línea formateada
+            m = re.search(r'contenido[:\s]+(.+?)(?:\s*[\|,]|\s*prioridad|$)', linea, re.IGNORECASE)
+            fragmento = m.group(1).strip() if m else linea.strip()
+            if fragmento and len(fragmento) < 200:
+                limitaciones.append(fragmento)
+    return "; ".join(limitaciones[:3])
+
+
+def construir_sistema(
+    contexto_usuario: dict,
+    motor_output: Optional[dict] = None,
+    recuperacion: Optional[dict] = None,
+) -> str:
+    """
+    Construye un system prompt personalizado para este atleta concreto.
+    Inyecta nombre, nivel, limitaciones activas y estado de recuperación como directivas.
+    """
+    perfil_txt = contexto_usuario.get("perfil_usuario", "")
+    memoria_txt = contexto_usuario.get("memory", "")
+
+    nombre = _extraer_campo(perfil_txt, "nombre", "name")
+    nivel = _extraer_campo(perfil_txt, "nivel", "level", "nivel_entrenamiento")
+    objetivo_perfil = _extraer_campo(perfil_txt, "objetivo_principal", "objetivo")
+
+    lesiones = _extraer_limitaciones(memoria_txt)
+
+    # --- Introducción personalizada ---
+    intro_partes = ["Eres Coach IA, entrenador personal y nutricionista deportivo."]
+    if nombre:
+        intro_partes.append(f"Tu atleta se llama {nombre}.")
+    if nivel:
+        intro_partes.append(f"Nivel de entrenamiento: {nivel}.")
+    if objetivo_perfil:
+        intro_partes.append(f"Objetivo principal: {objetivo_perfil}.")
+    intro_partes.append("Respondes en español con precisión técnica y tono profesional.")
+    intro = " ".join(intro_partes)
+
+    # --- Directivas críticas ---
+    directivas = []
+
+    if lesiones:
+        directivas.append(
+            f"LIMITACIONES ACTIVAS: {lesiones}. "
+            "Nunca prescribas el movimiento doloroso. Siempre ofrece variante segura."
+        )
+
+    # Check-in de recuperación (Fase 1+)
+    if recuperacion:
+        fatiga = recuperacion.get("fatiga")
+        sueno = recuperacion.get("calidad_sueno")
+        dolor = recuperacion.get("dolor_muscular")
+        estado_mental = recuperacion.get("estado_mental")
+        partes_rec = []
+        if fatiga is not None:
+            partes_rec.append(f"fatiga {fatiga}/5")
+        if sueno is not None:
+            partes_rec.append(f"sueño {sueno}/5")
+        if dolor is not None:
+            partes_rec.append(f"dolor muscular {dolor}/5")
+        if estado_mental is not None:
+            partes_rec.append(f"estado mental {estado_mental}/5")
+        if partes_rec:
+            resumen_rec = ", ".join(partes_rec)
+            if fatiga is not None and fatiga <= 2:
+                directivas.append(
+                    f"RECUPERACIÓN HOY: {resumen_rec}. "
+                    "Atleta fatigado. Modera intensidad y volumen. No fuerces progresión."
+                )
+            elif fatiga is not None and fatiga >= 4:
+                directivas.append(
+                    f"RECUPERACIÓN HOY: {resumen_rec}. "
+                    "Atleta bien recuperado. Puedes proponer sesión de alta intensidad."
+                )
+            else:
+                directivas.append(f"RECUPERACIÓN HOY: {resumen_rec}.")
+
+    # Estado global del motor de entrenamiento
+    if motor_output:
+        estado_g = motor_output.get("estado_global") or {}
+        score = estado_g.get("score_global", 50)
+        estado = estado_g.get("estado", "")
+        if score < 40:
+            directivas.append(
+                f"ANÁLISIS MOTOR: atleta en estado {estado.upper()} "
+                f"(score {score}/100). Prioriza recuperación. No escales carga hoy."
+            )
+        elif score < 60:
+            directivas.append(
+                f"ANÁLISIS MOTOR: {estado} (score {score}/100). "
+                "Mantén cargas conservadoras."
+            )
+
+    # Ensamblar sistema
+    bloques = [intro]
+    if directivas:
+        bloques.append("\n".join(directivas))
+    bloques.append(_REGLAS_FIJAS)
+    return "\n\n".join(bloques)
 
 
 def construir_prompt(
@@ -29,6 +147,7 @@ def construir_prompt(
     entreno_registrado: Optional[dict] = None,
     comida_registrada: Optional[dict] = None,
     macros_recalculados: Optional[dict] = None,
+    recuperacion: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -66,6 +185,32 @@ def construir_prompt(
     if contexto_usuario.get("memory"):
         bloques.append(f"## Lo que recuerdo del usuario\n{contexto_usuario['memory']}")
 
+    # --- Estado de recuperación hoy (check-in + biométricos + dolores) ---
+    if recuperacion:
+        lineas_rec = []
+        if recuperacion.get("fatiga") is not None:
+            lineas_rec.append(f"Fatiga: {recuperacion['fatiga']}/5")
+        if recuperacion.get("dolor_muscular") is not None:
+            lineas_rec.append(f"Dolor muscular: {recuperacion['dolor_muscular']}/5")
+        if recuperacion.get("calidad_sueno") is not None:
+            lineas_rec.append(f"Calidad sueño: {recuperacion['calidad_sueno']}/5")
+        if recuperacion.get("estado_mental") is not None:
+            lineas_rec.append(f"Estado mental: {recuperacion['estado_mental']}/5")
+        if recuperacion.get("sueno_horas") is not None:
+            lineas_rec.append(f"Horas de sueño: {recuperacion['sueno_horas']}h")
+        if recuperacion.get("hrv") is not None:
+            lineas_rec.append(f"HRV: {recuperacion['hrv']}ms")
+        if recuperacion.get("fc_reposo") is not None:
+            lineas_rec.append(f"FC reposo: {recuperacion['fc_reposo']}bpm")
+        if recuperacion.get("pasos") is not None:
+            lineas_rec.append(f"Pasos ayer: {recuperacion['pasos']}")
+        dolores = recuperacion.get("dolores_activos") or []
+        if dolores:
+            zonas = ", ".join(f"{d['zona']} {d['intensidad']}/10" for d in dolores)
+            lineas_rec.append(f"Dolores activos: {zonas}")
+        if lineas_rec:
+            bloques.append(f"## Estado de recuperación hoy\n" + "\n".join(lineas_rec))
+
     # --- Entreno recién registrado (registro_entreno) ---
     if entreno_registrado:
         texto = _formatear_entreno_registrado(entreno_registrado)
@@ -100,8 +245,8 @@ def construir_prompt(
     if rag_context and rag_context.strip():
         bloques.append(f"## Evidencia científica relevante\n{rag_context}")
 
-    # Construir mensaje del sistema
-    sistema = SISTEMA_BASE
+    # Construir mensaje del sistema personalizado
+    sistema = construir_sistema(contexto_usuario, motor_output, recuperacion)
     if bloques:
         sistema += "\n\n" + "\n\n".join(bloques)
 
@@ -225,5 +370,16 @@ def _formatear_motor(motor_output: dict) -> str:
         if isinstance(vol, dict) and vol:
             resumen_vol = ", ".join(f"{k}: {v}" for k, v in vol.items())
             partes.append(f"Volumen semanal: {resumen_vol}")
+
+    if motor_output.get("estado_global"):
+        eg = motor_output["estado_global"]
+        if isinstance(eg, dict):
+            score = eg.get("score_global", "")
+            estado = eg.get("estado", "")
+            desglose = eg.get("desglose", {})
+            partes.append(f"Estado global: {estado} (score {score}/100)")
+            if isinstance(desglose, dict) and desglose:
+                detalle = ", ".join(f"{k}: {v}" for k, v in desglose.items())
+                partes.append(f"Desglose: {detalle}")
 
     return "\n".join(partes)
