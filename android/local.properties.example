@@ -1,0 +1,11 @@
+# Copia este archivo a local.properties y rellena los valores.
+# local.properties está en .gitignore — nunca se commitea.
+
+# URL base de tu backend en Render (sin / final)
+API_BASE_URL=https://TU_APP.onrender.com
+
+# Misma API_KEY que tienes en Render → Environment → API_KEY
+API_KEY=tu_clave_secreta_aqui
+
+# SDK path (Android Studio lo rellena automáticamente)
+# sdk.dir=/Users/tu_usuario/Library/Android/sdk
