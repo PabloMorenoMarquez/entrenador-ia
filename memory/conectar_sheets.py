@@ -112,45 +112,85 @@ def _hojas_a_texto(filas: list[dict]) -> str:
     )
 
 
+_HOJAS_ESTATICAS = {
+    "perfil_usuario", "dias_tipicos", "plan_semanal", "objetivos", "alimentos_disponibles",
+}
+
+
 def _leer_sheets_sync(nombres: list[str]) -> dict:
     """
     Lee varias sheets y las devuelve como dict {nombre: texto}.
-    Función síncrona — se llama con asyncio.to_thread desde leer_sheets().
+    Hojas estáticas: Supabase configuracion primario, lazy-populate desde Sheets.
+    Hojas dinámicas y memory: Sheets directo.
     """
-    cliente = conectar()
     resultado = {}
+    hojas_para_sheets = []
 
-    for nombre in nombres:
+    # Intentar Supabase para hojas estáticas
+    try:
+        from db.repositorio import leer_configuracion_sb
+        for nombre in nombres:
+            if nombre in _HOJAS_ESTATICAS:
+                cfg = leer_configuracion_sb(nombre)
+                if cfg and cfg[0]:
+                    resultado[nombre] = cfg[0]
+                else:
+                    hojas_para_sheets.append(nombre)
+            else:
+                hojas_para_sheets.append(nombre)
+    except Exception as e:
+        print(f"[sheets] Configuracion Supabase no disponible: {e}")
+        hojas_para_sheets = list(nombres)
+
+    if not hojas_para_sheets:
+        return resultado
+
+    cliente = conectar()
+    for nombre in hojas_para_sheets:
         nombre_real = NOMBRE_HOJAS.get(nombre, nombre)
         filas = _leer_hoja_sync(cliente, nombre_real)
 
-        # Memory se formatea diferente: solo entradas activas, ordenadas por prioridad
         if nombre == "memory":
             activas = [f for f in filas if str(f.get("ACTIVA", "")).upper() in ("TRUE", "1", "VERDADERO", "SI", "SÍ")]
             activas_ordenadas = sorted(activas, key=lambda x: int(x.get("PRIORIDAD", 0) or 0), reverse=True)
-            resultado[nombre] = _hojas_a_texto(activas_ordenadas[:MAX_MEMORIA_PROMPT])
+            texto = _hojas_a_texto(activas_ordenadas[:MAX_MEMORIA_PROMPT])
         else:
-            resultado[nombre] = _hojas_a_texto(filas)
+            texto = _hojas_a_texto(filas)
+
+        resultado[nombre] = texto
+
+        # Lazy-populate en Supabase para hojas estáticas
+        if nombre in _HOJAS_ESTATICAS and texto:
+            try:
+                from db.repositorio import guardar_configuracion_sb
+                datos_json = {str(f.get(list(f.keys())[0], i)): f for i, f in enumerate(filas)} if nombre != "perfil_usuario" else {}
+                if nombre == "perfil_usuario":
+                    datos_json = {fila[list(fila.keys())[0]].lower().strip(): list(fila.values())[1] for fila in filas if len(fila) >= 2}
+                guardar_configuracion_sb(nombre, texto, datos_json)
+            except Exception as e:
+                print(f"[sheets] Error lazy-populate '{nombre}' en Supabase: {e}")
 
     return resultado
 
 
 def _leer_conversaciones_sync(limite: int) -> list[dict]:
     """
-    Lee las últimas N conversaciones.
-    Función síncrona — se llama con asyncio.to_thread.
+    Lee las últimas N conversaciones. Supabase primario, Sheets fallback.
     """
+    try:
+        from db.repositorio import leer_conversaciones_sb
+        rows = leer_conversaciones_sb(limite)
+        if rows:
+            return rows
+    except Exception as e:
+        print(f"[sheets] Conversaciones Supabase no disponible, usando Sheets: {e}")
+
     cliente = conectar()
     nombre_real = NOMBRE_HOJAS["conversaciones"]
     filas = _leer_hoja_sync(cliente, nombre_real)
-
     ultimas = filas[-limite:] if len(filas) > limite else filas
-
     return [
-        {
-            "rol": fila.get("ROL", "user"),
-            "contenido": fila.get("CONTENIDO", ""),
-        }
+        {"rol": fila.get("ROL", "user"), "contenido": fila.get("CONTENIDO", "")}
         for fila in ultimas
         if fila.get("CONTENIDO")
     ]
@@ -159,14 +199,22 @@ def _leer_conversaciones_sync(limite: int) -> list[dict]:
 # ---- Escritura ----
 
 def _guardar_conversacion_sync(mensaje_usuario: str, respuesta_coach: str) -> None:
-    """Guarda el turno actual en la sheet de conversaciones."""
-    cliente = conectar()
-    hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["conversaciones"])
-    timestamp = datetime.now().isoformat()
+    """Guarda el turno actual. Supabase primario, Sheets secundario (dual-write)."""
+    try:
+        from db.repositorio import guardar_conversacion_sb
+        guardar_conversacion_sb("user", mensaje_usuario)
+        guardar_conversacion_sb("assistant", respuesta_coach)
+    except Exception as e:
+        print(f"[sheets] Error guardando conversación en Supabase: {e}")
 
-    # Columnas: ID_CONVERSACION | TIMESTAMP | ROL | CONTENIDO
-    hoja.append_row(["", timestamp, "user", mensaje_usuario])
-    hoja.append_row(["", timestamp, "assistant", respuesta_coach])
+    try:
+        cliente = conectar()
+        hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["conversaciones"])
+        timestamp = datetime.now().isoformat()
+        hoja.append_row(["", timestamp, "user", mensaje_usuario])
+        hoja.append_row(["", timestamp, "assistant", respuesta_coach])
+    except Exception as e:
+        print(f"[sheets] Error guardando conversación en Sheets: {e}")
 
 
 def _guardar_memoria_sync(entrada: dict) -> None:
@@ -213,59 +261,54 @@ async def guardar_memoria(entrada: dict) -> None:
 
 def _guardar_entreno_sync(datos: dict) -> str:
     """
-    Guarda ejercicios y sesión en ejercicios_detalle + historial_entrenamientos.
-    datos: resultado de parsear_entreno() — tiene 'ejercicios' y 'sesion'.
+    Guarda sesión y ejercicios. Supabase primario, Sheets secundario (dual-write).
     Devuelve sesion_id generado.
     """
-    cliente = conectar()
-    spreadsheet = _get_spreadsheet(cliente)
     ahora = datetime.now()
     sesion_id = ahora.strftime("%Y%m%d-%H%M%S")
-    fecha = ahora.strftime("%Y-%m-%d")
-    hora = ahora.strftime("%H:%M")
 
-    # -- historial_entrenamientos --
-    # Columnas: SESION_ID|FECHA|HORA_INICIO|HORA_FIN|DURACION_MIN|TIPO_SESION|
-    #           GRUPO_MUSCULAR_PRINCIPAL|GRUPO_MUSCULAR_SECUNDARIO|
-    #           NIVEL_ENERGIA_1_5|NIVEL_ESFUERZO_1_10|CALORIAS_APROX|NOTAS_SESION
-    sesion = datos.get("sesion") or {}
-    hoja_hist = spreadsheet.worksheet(NOMBRE_HOJAS["historial_entrenamientos"])
-    hoja_hist.append_row([
-        sesion_id,
-        fecha,
-        hora,
-        "",
-        sesion.get("duracion_min") or "",
-        sesion.get("tipo_sesion") or "",
-        sesion.get("grupo_muscular_principal") or "",
-        "",
-        sesion.get("nivel_energia") or "",
-        sesion.get("nivel_esfuerzo") or "",
-        "",
-        sesion.get("notas") or "",
-    ])
+    try:
+        from db.repositorio import guardar_entreno_sb
+        guardar_entreno_sb(datos, sesion_id)
+    except Exception as e:
+        print(f"[sheets] Error guardando entreno en Supabase: {e}")
 
-    # -- ejercicios_detalle --
-    # Columnas: SESION_ID|FECHA|ORDEN|EJERCICIO|GRUPO_MUSCULAR|SERIES|
-    #           REPS_OBJETIVO|REPS_REALIZADAS|PESO_KG|TIPO_PESO|
-    #           DESCANSO_SEG|RIR|NOTAS_EJERCICIO
-    hoja_ej = spreadsheet.worksheet(NOMBRE_HOJAS["ejercicios_detalle"])
-    for orden, ej in enumerate(datos.get("ejercicios") or [], start=1):
-        hoja_ej.append_row([
-            sesion_id,
-            fecha,
-            orden,
-            ej.get("ejercicio") or "",
-            ej.get("grupo_muscular") or "",
-            ej.get("series") or "",
-            ej.get("reps_objetivo") or "",
-            ej.get("reps_realizadas") or "",
-            ej.get("peso_kg") or "",
-            ej.get("tipo_peso") or "",
-            ej.get("descanso_seg") or "",
-            ej.get("rir") or "",
-            ej.get("notas") or "",
+    try:
+        cliente = conectar()
+        spreadsheet = _get_spreadsheet(cliente)
+        fecha = ahora.strftime("%Y-%m-%d")
+        hora = ahora.strftime("%H:%M")
+        sesion = datos.get("sesion") or {}
+
+        hoja_hist = spreadsheet.worksheet(NOMBRE_HOJAS["historial_entrenamientos"])
+        hoja_hist.append_row([
+            sesion_id, fecha, hora, "",
+            sesion.get("duracion_min") or "",
+            sesion.get("tipo_sesion") or "",
+            sesion.get("grupo_muscular_principal") or "",
+            "",
+            sesion.get("nivel_energia") or "",
+            sesion.get("nivel_esfuerzo") or "",
+            "", sesion.get("notas") or "",
         ])
+
+        hoja_ej = spreadsheet.worksheet(NOMBRE_HOJAS["ejercicios_detalle"])
+        for orden, ej in enumerate(datos.get("ejercicios") or [], start=1):
+            hoja_ej.append_row([
+                sesion_id, fecha, orden,
+                ej.get("ejercicio") or "",
+                ej.get("grupo_muscular") or "",
+                ej.get("series") or "",
+                ej.get("reps_objetivo") or "",
+                ej.get("reps_realizadas") or "",
+                ej.get("peso_kg") or "",
+                ej.get("tipo_peso") or "",
+                ej.get("descanso_seg") or "",
+                ej.get("rir") or "",
+                ej.get("notas") or "",
+            ])
+    except Exception as e:
+        print(f"[sheets] Error guardando entreno en Sheets: {e}")
 
     return sesion_id
 
@@ -340,39 +383,41 @@ async def guardar_entreno(datos: dict) -> str:
 
 def _guardar_comida_sync(datos: dict) -> int:
     """
-    Guarda alimentos en registro_comidas. Una fila por alimento.
-    datos: resultado de parsear_comida() — tiene 'alimentos' y 'comida'.
+    Guarda alimentos en registro_comidas. Supabase primario, Sheets secundario (dual-write).
     Devuelve número de filas escritas.
     """
-    cliente = conectar()
-    spreadsheet = _get_spreadsheet(cliente)
-    ahora = datetime.now()
-    fecha = ahora.strftime("%Y-%m-%d")
-    hora = ahora.strftime("%H:%M")
+    try:
+        from db.repositorio import guardar_comidas_sb
+        guardar_comidas_sb(datos)
+    except Exception as e:
+        print(f"[sheets] Error guardando comida en Supabase: {e}")
 
-    comida = datos.get("comida") or {}
-    tipo_comida = comida.get("tipo_comida") or ""
-    notas_comida = comida.get("notas") or ""
-
-    # Columnas: FECHA|HORA|TIPO_COMIDA|ALIMENTO|CANTIDAD_G_ML|CALORIAS|
-    #           PROTEINAS_G|CARBOS_G|GRASAS_G|FIBRA_G|NOTAS
-    hoja = spreadsheet.worksheet(NOMBRE_HOJAS["registro_comidas"])
     alimentos = datos.get("alimentos") or []
-    for alimento in alimentos:
-        notas_fila = alimento.get("notas") or notas_comida
-        hoja.append_row([
-            fecha,
-            hora,
-            tipo_comida,
-            alimento.get("alimento") or "",
-            alimento.get("cantidad_g_ml") or "",
-            alimento.get("calorias") or "",
-            alimento.get("proteinas_g") or "",
-            alimento.get("carbos_g") or "",
-            alimento.get("grasas_g") or "",
-            alimento.get("fibra_g") or "",
-            notas_fila,
-        ])
+    try:
+        cliente = conectar()
+        spreadsheet = _get_spreadsheet(cliente)
+        ahora = datetime.now()
+        fecha = ahora.strftime("%Y-%m-%d")
+        hora = ahora.strftime("%H:%M")
+        comida = datos.get("comida") or {}
+        tipo_comida = comida.get("tipo_comida") or ""
+        notas_comida = comida.get("notas") or ""
+        hoja = spreadsheet.worksheet(NOMBRE_HOJAS["registro_comidas"])
+        for alimento in alimentos:
+            notas_fila = alimento.get("notas") or notas_comida
+            hoja.append_row([
+                fecha, hora, tipo_comida,
+                alimento.get("alimento") or "",
+                alimento.get("cantidad_g_ml") or "",
+                alimento.get("calorias") or "",
+                alimento.get("proteinas_g") or "",
+                alimento.get("carbos_g") or "",
+                alimento.get("grasas_g") or "",
+                alimento.get("fibra_g") or "",
+                notas_fila,
+            ])
+    except Exception as e:
+        print(f"[sheets] Error guardando comida en Sheets: {e}")
 
     return len(alimentos)
 
@@ -384,10 +429,16 @@ async def guardar_comida(datos: dict) -> int:
 
 def _leer_macros_objetivo_activos_sync(periodo: str) -> dict | None:
     """
-    Lee la fila activa de macros_objetivo para un periodo dado.
-    Columnas: FECHA_CALCULO|PERIODO|KCAL|PROTEINAS_G|CARBOS_G|GRASAS_G|NOTAS|ACTIVA
-    Devuelve dict con los macros o None si no existe.
+    Lee macros objetivo activos. Supabase primario, Sheets fallback.
     """
+    try:
+        from db.repositorio import leer_macros_objetivo_sb
+        macros = leer_macros_objetivo_sb(periodo)
+        if macros:
+            return macros
+    except Exception as e:
+        print(f"[sheets] Macros Supabase no disponible, usando Sheets: {e}")
+
     cliente = conectar()
     filas = _leer_hoja_sync(cliente, NOMBRE_HOJAS["macros_objetivo"])
     for fila in reversed(filas):
@@ -406,43 +457,51 @@ def _leer_macros_objetivo_activos_sync(periodo: str) -> dict | None:
 
 def _guardar_macros_objetivo_sync(periodo: str, macros: dict) -> None:
     """
-    Desactiva la fila activa previa del mismo periodo y escribe una nueva ACTIVA=TRUE.
-    macros: { kcal, proteinas_g, carbos_g, grasas_g, notas }
+    Guarda macros objetivo. Supabase primario, Sheets secundario (dual-write).
     """
-    cliente = conectar()
-    spreadsheet = _get_spreadsheet(cliente)
-    hoja = spreadsheet.worksheet(NOMBRE_HOJAS["macros_objetivo"])
-    filas = hoja.get_all_values()
+    try:
+        from db.repositorio import guardar_macros_objetivo_sb
+        guardar_macros_objetivo_sb(periodo, macros)
+    except Exception as e:
+        print(f"[sheets] Error guardando macros en Supabase: {e}")
 
-    if len(filas) > 1:
-        headers = [h.upper() for h in filas[0]]
-        idx = {h: i for i, h in enumerate(headers)}
-        col_activa = idx.get("ACTIVA")
-        col_periodo = idx.get("PERIODO")
+    try:
+        cliente = conectar()
+        spreadsheet = _get_spreadsheet(cliente)
+        hoja = spreadsheet.worksheet(NOMBRE_HOJAS["macros_objetivo"])
+        filas = hoja.get_all_values()
 
-        if col_activa is not None and col_periodo is not None:
-            import gspread.utils as gu
-            updates = []
-            for row_num, fila in enumerate(filas[1:], start=2):
-                if len(fila) > col_periodo and fila[col_periodo] == periodo:
-                    activa = fila[col_activa].upper() if len(fila) > col_activa else ""
-                    if activa in ("TRUE", "1", "VERDADERO", "SI", "SÍ"):
-                        cell = gu.rowcol_to_a1(row_num, col_activa + 1)
-                        updates.append({"range": cell, "values": [["FALSE"]]})
-            if updates:
-                hoja.batch_update(updates)
+        if len(filas) > 1:
+            headers = [h.upper() for h in filas[0]]
+            idx = {h: i for i, h in enumerate(headers)}
+            col_activa = idx.get("ACTIVA")
+            col_periodo = idx.get("PERIODO")
 
-    timestamp = datetime.now().isoformat()
-    hoja.append_row([
-        timestamp,
-        periodo,
-        macros.get("kcal", ""),
-        macros.get("proteinas_g", ""),
-        macros.get("carbos_g", ""),
-        macros.get("grasas_g", ""),
-        macros.get("notas", ""),
-        "TRUE",
-    ])
+            if col_activa is not None and col_periodo is not None:
+                import gspread.utils as gu
+                updates = []
+                for row_num, fila in enumerate(filas[1:], start=2):
+                    if len(fila) > col_periodo and fila[col_periodo] == periodo:
+                        activa = fila[col_activa].upper() if len(fila) > col_activa else ""
+                        if activa in ("TRUE", "1", "VERDADERO", "SI", "SÍ"):
+                            cell = gu.rowcol_to_a1(row_num, col_activa + 1)
+                            updates.append({"range": cell, "values": [["FALSE"]]})
+                if updates:
+                    hoja.batch_update(updates)
+
+        timestamp = datetime.now().isoformat()
+        hoja.append_row([
+            timestamp,
+            periodo,
+            macros.get("kcal", ""),
+            macros.get("proteinas_g", ""),
+            macros.get("carbos_g", ""),
+            macros.get("grasas_g", ""),
+            macros.get("notas", ""),
+            "TRUE",
+        ])
+    except Exception as e:
+        print(f"[sheets] Error guardando macros en Sheets: {e}")
 
 
 def _to_num(val):

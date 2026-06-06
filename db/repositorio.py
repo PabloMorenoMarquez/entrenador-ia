@@ -420,3 +420,305 @@ def leer_cronotipo() -> Optional[str]:
         .execute()
     )
     return result.data[0]["tipo"] if result.data else None
+
+
+# ─────────────────────────────────────────
+# CONVERSACIONES (Fase 7)
+# ─────────────────────────────────────────
+
+def guardar_conversacion_sb(rol: str, contenido: str) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("conversaciones").insert({
+        "user_id": uid,
+        "rol": rol,
+        "contenido": contenido,
+    }).execute()
+
+
+def leer_conversaciones_sb(limite: int = 10) -> list[dict]:
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("conversaciones")
+        .select("rol, contenido, timestamp")
+        .eq("user_id", uid)
+        .order("timestamp", desc=True)
+        .limit(limite)
+        .execute()
+    )
+    rows = list(reversed(result.data or []))
+    return [{"rol": r["rol"], "contenido": r["contenido"]} for r in rows]
+
+
+# ─────────────────────────────────────────
+# MACROS OBJETIVO (Fase 7)
+# ─────────────────────────────────────────
+
+def guardar_macros_objetivo_sb(periodo: str, macros: dict) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("macros_objetivo").update({"activa": False}).eq("user_id", uid).eq("periodo", periodo).eq("activa", True).execute()
+    sb.table("macros_objetivo").insert({
+        "user_id": uid,
+        "periodo": periodo,
+        "kcal": macros.get("kcal"),
+        "proteinas_g": macros.get("proteinas_g"),
+        "carbos_g": macros.get("carbos_g"),
+        "grasas_g": macros.get("grasas_g"),
+        "notas": macros.get("notas", ""),
+        "activa": True,
+    }).execute()
+
+
+def leer_macros_objetivo_sb(periodo: str = "dia") -> Optional[dict]:
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("macros_objetivo")
+        .select("*")
+        .eq("user_id", uid)
+        .eq("periodo", periodo)
+        .eq("activa", True)
+        .order("fecha_calculo", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+    row = result.data[0]
+    fc = row.get("fecha_calculo") or ""
+    return {
+        "kcal": row.get("kcal") or 0,
+        "proteinas_g": row.get("proteinas_g") or 0,
+        "carbos_g": row.get("carbos_g") or 0,
+        "grasas_g": row.get("grasas_g") or 0,
+        "notas": row.get("notas") or "",
+        "fecha_calculo": fc[:10] if fc else "",
+    }
+
+
+# ─────────────────────────────────────────
+# REGISTRO COMIDAS (Fase 7)
+# ─────────────────────────────────────────
+
+def guardar_comidas_sb(datos: dict) -> int:
+    sb = get_client()
+    uid = get_user_id()
+    from datetime import datetime as _dt
+    ahora = _dt.now()
+    comida = datos.get("comida") or {}
+    tipo_comida = comida.get("tipo_comida") or ""
+    notas_comida = comida.get("notas") or ""
+    alimentos = datos.get("alimentos") or []
+    rows = [{
+        "user_id": uid,
+        "fecha": ahora.strftime("%Y-%m-%d"),
+        "hora": ahora.strftime("%H:%M"),
+        "tipo_comida": tipo_comida,
+        "alimento": al.get("alimento") or "",
+        "cantidad_g_ml": al.get("cantidad_g_ml") or None,
+        "calorias": al.get("calorias") or None,
+        "proteinas_g": al.get("proteinas_g") or None,
+        "carbos_g": al.get("carbos_g") or None,
+        "grasas_g": al.get("grasas_g") or None,
+        "fibra_g": al.get("fibra_g") or None,
+        "notas": al.get("notas") or notas_comida,
+    } for al in alimentos]
+    if rows:
+        sb.table("registro_comidas").insert(rows).execute()
+    return len(rows)
+
+
+def leer_comidas_fecha_sb(fecha: str) -> list[dict]:
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("registro_comidas")
+        .select("*")
+        .eq("user_id", uid)
+        .eq("fecha", fecha)
+        .order("hora")
+        .execute()
+    )
+    return result.data or []
+
+
+def leer_comidas_rango_sb(desde: str, hasta: str) -> list[dict]:
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("registro_comidas")
+        .select("*")
+        .eq("user_id", uid)
+        .gte("fecha", desde)
+        .lte("fecha", hasta)
+        .order("fecha")
+        .execute()
+    )
+    return result.data or []
+
+
+# ─────────────────────────────────────────
+# HISTORIAL ENTRENAMIENTOS (Fase 7)
+# ─────────────────────────────────────────
+
+def _to_num_repo(val) -> float:
+    try:
+        return float(str(val).replace(",", "."))
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def guardar_entreno_sb(datos: dict, sesion_id: str) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    from datetime import datetime as _dt
+    ahora = _dt.now()
+    sesion = datos.get("sesion") or {}
+    sb.table("historial_entrenamientos").upsert({
+        "user_id": uid,
+        "sesion_id": sesion_id,
+        "fecha": ahora.strftime("%Y-%m-%d"),
+        "hora_inicio": ahora.strftime("%H:%M"),
+        "duracion_min": sesion.get("duracion_min") or None,
+        "tipo_sesion": sesion.get("tipo_sesion") or None,
+        "grupo_muscular_principal": sesion.get("grupo_muscular_principal") or None,
+        "nivel_energia": sesion.get("nivel_energia") or None,
+        "nivel_esfuerzo": sesion.get("nivel_esfuerzo") or None,
+        "notas_sesion": sesion.get("notas") or None,
+    }, on_conflict="user_id,sesion_id").execute()
+    ejercicios = datos.get("ejercicios") or []
+    if ejercicios:
+        rows = [{
+            "user_id": uid,
+            "sesion_id": sesion_id,
+            "fecha": ahora.strftime("%Y-%m-%d"),
+            "orden": i + 1,
+            "ejercicio": ej.get("ejercicio") or "",
+            "grupo_muscular": ej.get("grupo_muscular") or None,
+            "series": ej.get("series") or None,
+            "reps_objetivo": str(ej.get("reps_objetivo") or ""),
+            "reps_realizadas": str(ej.get("reps_realizadas") or ""),
+            "peso_kg": ej.get("peso_kg") or None,
+            "tipo_peso": ej.get("tipo_peso") or None,
+            "descanso_seg": ej.get("descanso_seg") or None,
+            "rir": ej.get("rir") or None,
+            "notas": ej.get("notas") or None,
+        } for i, ej in enumerate(ejercicios)]
+        sb.table("ejercicios_detalle").insert(rows).execute()
+
+
+def leer_rutina_sb() -> Optional[dict]:
+    sb = get_client()
+    uid = get_user_id()
+    r = (
+        sb.table("historial_entrenamientos")
+        .select("sesion_id, fecha")
+        .eq("user_id", uid)
+        .order("fecha", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not r.data:
+        return None
+    last = r.data[0]
+    sesion_id, fecha = last["sesion_id"], last["fecha"]
+    ej_r = (
+        sb.table("ejercicios_detalle")
+        .select("*")
+        .eq("user_id", uid)
+        .eq("sesion_id", sesion_id)
+        .order("orden")
+        .execute()
+    )
+    ejercicios = [{
+        "orden": ej.get("orden") or 0,
+        "ejercicio": ej.get("ejercicio") or "",
+        "grupo_muscular": ej.get("grupo_muscular") or "",
+        "series": ej.get("series") or 0,
+        "reps_objetivo": ej.get("reps_objetivo") or "",
+        "reps_realizadas": ej.get("reps_realizadas") or "",
+        "peso_kg": ej.get("peso_kg") or 0,
+        "tipo_peso": ej.get("tipo_peso") or "",
+        "descanso_seg": ej.get("descanso_seg") or 0,
+        "rir": ej.get("rir") or 0,
+        "notas": ej.get("notas") or "",
+    } for ej in (ej_r.data or [])]
+    return {"sesion_id": sesion_id, "fecha": fecha, "ejercicios": ejercicios}
+
+
+def leer_historial_sb(limite: int = 30) -> dict:
+    sb = get_client()
+    uid = get_user_id()
+    s_r = (
+        sb.table("historial_entrenamientos")
+        .select("*")
+        .eq("user_id", uid)
+        .order("fecha", desc=True)
+        .limit(limite)
+        .execute()
+    )
+    sesiones = s_r.data or []
+    if not sesiones:
+        return {"sesiones": []}
+    sids = [s["sesion_id"] for s in sesiones]
+    ej_r = (
+        sb.table("ejercicios_detalle")
+        .select("sesion_id, series, reps_realizadas, reps_objetivo, peso_kg")
+        .eq("user_id", uid)
+        .in_("sesion_id", sids)
+        .execute()
+    )
+    vol: dict[str, float] = {}
+    for ej in (ej_r.data or []):
+        sid = ej.get("sesion_id", "")
+        s = ej.get("series") or 0
+        reps = _to_num_repo(ej.get("reps_realizadas") or ej.get("reps_objetivo"))
+        peso = ej.get("peso_kg") or 0
+        vol[sid] = vol.get(sid, 0) + s * reps * peso
+    return {"sesiones": [{
+        "sesion_id": s["sesion_id"],
+        "fecha": s.get("fecha", ""),
+        "hora_inicio": str(s.get("hora_inicio") or ""),
+        "duracion_min": s.get("duracion_min") or 0,
+        "tipo_sesion": s.get("tipo_sesion") or "",
+        "grupo_muscular_principal": s.get("grupo_muscular_principal") or "",
+        "nivel_energia": s.get("nivel_energia") or 0,
+        "nivel_esfuerzo": s.get("nivel_esfuerzo") or 0,
+        "notas": s.get("notas_sesion") or "",
+        "volumen_total_kg": round(vol.get(s["sesion_id"], 0), 1),
+    } for s in sesiones]}
+
+
+# ─────────────────────────────────────────
+# CONFIGURACIÓN ESTÁTICA (Fase 7)
+# ─────────────────────────────────────────
+
+def leer_configuracion_sb(hoja: str) -> Optional[tuple]:
+    """Retorna (contenido_texto, datos_json) o None si no existe."""
+    sb = get_client()
+    uid = get_user_id()
+    result = (
+        sb.table("configuracion")
+        .select("contenido_texto, datos_json")
+        .eq("user_id", uid)
+        .eq("hoja", hoja)
+        .execute()
+    )
+    if not result.data:
+        return None
+    row = result.data[0]
+    return row.get("contenido_texto", ""), row.get("datos_json") or {}
+
+
+def guardar_configuracion_sb(hoja: str, contenido_texto: str = "", datos_json: dict = None) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("configuracion").upsert({
+        "user_id": uid,
+        "hoja": hoja,
+        "contenido_texto": contenido_texto,
+        "datos_json": datos_json or {},
+        "updated_at": date.today().isoformat(),
+    }, on_conflict="user_id,hoja").execute()

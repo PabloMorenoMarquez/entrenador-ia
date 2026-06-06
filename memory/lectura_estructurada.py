@@ -21,10 +21,16 @@ from memory.conectar_sheets import (
 
 def _leer_perfil_sync() -> dict:
     """
-    perfil_usuario es key-value vertical: col A = campo, col B = valor.
-    get_all_values() devuelve lista de listas; la primera fila puede ser cabecera.
-    Devuelve dict {campo_lower: valor}.
+    Lee perfil_usuario. Supabase configuracion primario (datos_json), lazy-populate, Sheets fallback.
     """
+    try:
+        from db.repositorio import leer_configuracion_sb
+        cfg = leer_configuracion_sb("perfil_usuario")
+        if cfg and cfg[1]:  # datos_json no vacío
+            return cfg[1]
+    except Exception as e:
+        print(f"[lectura] Perfil Supabase no disponible: {e}")
+
     cliente = conectar()
     hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["perfil_usuario"])
     filas = hoja.get_all_values()
@@ -32,56 +38,83 @@ def _leer_perfil_sync() -> dict:
     for fila in filas:
         if len(fila) >= 2 and fila[0] and fila[0].lower() not in ("campo", "etiqueta", "clave", "key"):
             resultado[fila[0].lower().strip()] = fila[1].strip() if fila[1] else ""
+
+    if resultado:
+        try:
+            from db.repositorio import guardar_configuracion_sb
+            texto = "\n".join(f"{k}: {v}" for k, v in resultado.items() if v)
+            guardar_configuracion_sb("perfil_usuario", texto, resultado)
+        except Exception as e:
+            print(f"[lectura] Error lazy-populate perfil en Supabase: {e}")
+
     return resultado
 
 
 def _guardar_perfil_sync(campos: dict) -> None:
     """
-    Actualiza campos en perfil_usuario.
-    Si la fila existe (col A coincide) → update col B.
-    Si no existe → append_row([campo, valor]).
+    Actualiza campos en perfil_usuario. Dual-write: Supabase + Sheets.
     """
-    import gspread.utils as gu
-    cliente = conectar()
-    hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["perfil_usuario"])
-    filas = hoja.get_all_values()
+    # Supabase: leer perfil actual, mergear, guardar
+    try:
+        from db.repositorio import leer_configuracion_sb, guardar_configuracion_sb
+        cfg = leer_configuracion_sb("perfil_usuario")
+        perfil_actual = cfg[1] if (cfg and cfg[1]) else {}
+        perfil_actual.update({k.lower().strip(): str(v) for k, v in campos.items()})
+        texto = "\n".join(f"{k}: {v}" for k, v in perfil_actual.items() if v)
+        guardar_configuracion_sb("perfil_usuario", texto, perfil_actual)
+    except Exception as e:
+        print(f"[lectura] Error guardando perfil en Supabase: {e}")
 
-    # índice: campo_lower → número de fila (1-based)
-    mapa_filas = {}
-    for i, fila in enumerate(filas, start=1):
-        if fila and fila[0]:
-            mapa_filas[fila[0].lower().strip()] = i
+    try:
+        import gspread.utils as gu
+        cliente = conectar()
+        hoja = _get_spreadsheet(cliente).worksheet(NOMBRE_HOJAS["perfil_usuario"])
+        filas = hoja.get_all_values()
 
-    updates = []
-    nuevos = []
-    for campo, valor in campos.items():
-        campo_norm = campo.lower().strip()
-        if campo_norm in mapa_filas:
-            row_num = mapa_filas[campo_norm]
-            cell = gu.rowcol_to_a1(row_num, 2)  # col B
-            updates.append({"range": cell, "values": [[str(valor)]]})
-        else:
-            nuevos.append([campo, str(valor)])
+        mapa_filas = {}
+        for i, fila in enumerate(filas, start=1):
+            if fila and fila[0]:
+                mapa_filas[fila[0].lower().strip()] = i
 
-    if updates:
-        hoja.batch_update(updates)
-    for fila_nueva in nuevos:
-        hoja.append_row(fila_nueva)
+        updates = []
+        nuevos = []
+        for campo, valor in campos.items():
+            campo_norm = campo.lower().strip()
+            if campo_norm in mapa_filas:
+                row_num = mapa_filas[campo_norm]
+                cell = gu.rowcol_to_a1(row_num, 2)
+                updates.append({"range": cell, "values": [[str(valor)]]})
+            else:
+                nuevos.append([campo, str(valor)])
+
+        if updates:
+            hoja.batch_update(updates)
+        for fila_nueva in nuevos:
+            hoja.append_row(fila_nueva)
+    except Exception as e:
+        print(f"[lectura] Error guardando perfil en Sheets: {e}")
 
 
 # ---- rutina (última sesión de ejercicios_detalle) ----
 
 def _leer_rutina_sync() -> dict:
     """
-    Devuelve los ejercicios de la sesión más reciente en ejercicios_detalle.
+    Última sesión de ejercicios. Supabase primario, Sheets fallback.
     """
+    try:
+        from db.repositorio import leer_rutina_sb
+        rutina = leer_rutina_sb()
+        if rutina:
+            return rutina
+    except Exception as e:
+        print(f"[lectura] Rutina Supabase no disponible: {e}")
+
     cliente = conectar()
     filas = _leer_hoja_sync(cliente, NOMBRE_HOJAS["ejercicios_detalle"])
     if not filas:
         return {"sesion_id": None, "fecha": None, "ejercicios": []}
 
-    # Encontrar el SESION_ID más reciente
-    ultimo_sesion_id = filas[-1].get("SESION_ID", "")
+    ultimo_sesion_id = ""
     for fila in reversed(filas):
         sid = fila.get("SESION_ID", "")
         if sid:
@@ -128,15 +161,39 @@ def _calcular_delta(objetivo: dict, consumido: dict) -> dict:
     return {k: round(consumido[k] - objetivo[k], 1) for k in _MACRO_KEYS}
 
 
-def _leer_comidas_sync() -> list[dict]:
+def _leer_comidas_sync(desde: str = None, hasta: str = None) -> list[dict]:
+    """Lee comidas desde Supabase (primario) o Sheets (fallback)."""
+    try:
+        from db.repositorio import leer_comidas_fecha_sb, leer_comidas_rango_sb
+        if desde and hasta:
+            rows = leer_comidas_rango_sb(desde, hasta)
+        else:
+            from datetime import date as _date
+            rows = leer_comidas_fecha_sb(desde or _date.today().isoformat())
+        if rows is not None:
+            return [{
+                "FECHA": r.get("fecha", ""),
+                "HORA": str(r.get("hora") or ""),
+                "TIPO_COMIDA": r.get("tipo_comida", ""),
+                "ALIMENTO": r.get("alimento", ""),
+                "CANTIDAD_G_ML": r.get("cantidad_g_ml") or 0,
+                "CALORIAS": r.get("calorias") or 0,
+                "PROTEINAS_G": r.get("proteinas_g") or 0,
+                "CARBOS_G": r.get("carbos_g") or 0,
+                "GRASAS_G": r.get("grasas_g") or 0,
+                "FIBRA_G": r.get("fibra_g") or 0,
+                "NOTAS": r.get("notas", ""),
+            } for r in rows]
+    except Exception as e:
+        print(f"[lectura] Comidas Supabase no disponible: {e}")
+
     cliente = conectar()
     return _leer_hoja_sync(cliente, NOMBRE_HOJAS["registro_comidas"])
 
 
 def _leer_nutricion_hoy_sync(objetivo: dict) -> dict:
     hoy = date.today().isoformat()
-    todas = _leer_comidas_sync()
-    de_hoy = [f for f in todas if f.get("FECHA", "") == hoy]
+    de_hoy = _leer_comidas_sync(desde=hoy)
     consumido = _sumar_macros(de_hoy)
     comidas = [
         {
@@ -165,7 +222,9 @@ def _leer_nutricion_hoy_sync(objetivo: dict) -> dict:
 def _leer_nutricion_semana_sync(objetivo: dict) -> dict:
     hoy = date.today()
     fechas_semana = [(hoy - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
-    todas = _leer_comidas_sync()
+    desde = fechas_semana[0]
+    hasta = fechas_semana[-1]
+    todas = _leer_comidas_sync(desde=desde, hasta=hasta)
 
     dias = []
     for fecha in fechas_semana:
@@ -180,11 +239,19 @@ def _leer_nutricion_semana_sync(objetivo: dict) -> dict:
 # ---- historial entrenamientos ----
 
 def _leer_historial_sync(limite: int = 30) -> dict:
+    """Historial de entrenamientos. Supabase primario, Sheets fallback."""
+    try:
+        from db.repositorio import leer_historial_sb
+        hist = leer_historial_sb(limite)
+        if hist.get("sesiones"):
+            return hist
+    except Exception as e:
+        print(f"[lectura] Historial Supabase no disponible: {e}")
+
     cliente = conectar()
     sesiones = _leer_hoja_sync(cliente, NOMBRE_HOJAS["historial_entrenamientos"])
     ejercicios = _leer_hoja_sync(cliente, NOMBRE_HOJAS["ejercicios_detalle"])
 
-    # índice ejercicios por sesion_id para calcular volumen
     vol_por_sesion: dict[str, float] = {}
     for ej in ejercicios:
         sid = ej.get("SESION_ID", "")
