@@ -9,9 +9,9 @@ export default function Loading({ text = 'Cargando...' }) {
       color: 'var(--text-dim)',
       fontSize: '0.9rem',
     }}>
-      <span style={{ animation: 'dotBounce 1.3s infinite', animationDelay: '0ms' }}>●</span>
-      <span style={{ animation: 'dotBounce 1.3s infinite', animationDelay: '0.18s' }}>●</span>
-      <span style={{ animation: 'dotBounce 1.3s infinite', animationDelay: '0.36s' }}>●</span>
+      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0ms' }}>●</span>
+      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0.15s' }}>●</span>
+      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0.3s' }}>●</span>
       {text && <span style={{ marginLeft: 8 }}>{text}</span>}
     </div>
   )

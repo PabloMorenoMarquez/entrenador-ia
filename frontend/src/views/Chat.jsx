@@ -9,7 +9,7 @@ function TypingDots() {
     height: 6,
     borderRadius: '50%',
     background: 'var(--text-dim)',
-    animation: 'dotBounce 1.3s infinite',
+    animation: 'pulse 1.2s ease-in-out infinite',
     animationDelay: delay,
     margin: '0 2px',
   })

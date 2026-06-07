@@ -1,19 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #09090f;
-  --bg-card: #0f0f1e;
-  --bg-header: #0d0d18;
-  --border: #1a1a2e;
-  --accent: #f97316;
-  --accent-light: #fb923c;
-  --accent-soft: #fdba74;
-  --text: #e2e8f0;
-  --text-muted: #c8d4e8;
-  --text-dim: #6b7a99;
-  --green: #22c55e;
-  --font: 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-heading: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* neutros */
+  --bg: #0a0a0b;
+  --bg-card: #121214;
+  --bg-card-raised: #18181b;
+  --bg-header: #0d0d0f;
+  --border: #242427;
+  --border-strong: #34343a;
+  --text: #ededee;
+  --text-muted: #a0a0a6;
+  --text-dim: #5e5e66;
+
+  /* acento único */
+  --accent: #56b3c7;
+  --accent-dim: #3d7e8c;
+  /* alias compat — refs existentes en vistas; se sustituyen al rediseñar cada vista */
+  --accent-light: var(--accent);
+  --accent-soft: var(--accent);
+
+  /* datos (semántico, no decorativo) */
+  --data-good: #6cc788;
+  --data-warn: #d4a24e;
+  --data-bad: #d46a6a;
+  --green: var(--data-good);
+
+  /* tipografía */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* escala espaciado (4px base) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* radios (pequeños = instrumental) */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  /* movimiento */
+  --t-fast: 120ms;
+  --t-base: 160ms;
+  --ease: cubic-bezier(.2, .6, .3, 1);
 }
 
 * {
@@ -38,8 +70,9 @@ body {
 }
 
 h1, h2, h3 {
-  font-family: var(--font-heading);
-  letter-spacing: -0.01em;
+  font-family: var(--font);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 button {
@@ -59,7 +92,7 @@ a {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
 
 input, textarea, select {
   font-size: 16px;
@@ -67,23 +100,39 @@ input, textarea, select {
   color: var(--text);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--t-base);
 }
 
 input:focus, textarea:focus {
   border-color: var(--accent);
 }
 
+/* cifras tabulares — usar en cualquier valor numérico/métrico */
+.num {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* etiqueta de campo — mono, mayúsculas, tracking amplio */
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
 /* clickable card hover — targets cards inside <a> links or with .card-hover class */
 a .card,
 .card-hover {
-  transition: border-color 0.15s, transform 0.12s;
+  transition: border-color var(--t-base), transform var(--t-fast);
 }
 a:hover .card,
 .card-hover:hover {
-  border-color: rgba(249, 115, 22, 0.35);
+  border-color: var(--border-strong);
 }
 a:active .card,
 .card-hover:active {
@@ -96,10 +145,14 @@ a:active .card,
 }
 
 .fade-up {
-  animation: fadeUp 0.18s ease;
+  animation: fadeUp var(--t-base) var(--ease);
 }
 
-@keyframes dotBounce {
-  0%, 80%, 100% { transform: translateY(0); color: var(--text-dim); }
-  30%            { transform: translateY(-6px); color: var(--accent-light); }
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
 }
