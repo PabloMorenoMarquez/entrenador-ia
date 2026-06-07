@@ -4,28 +4,34 @@ import Card from '../components/Card'
 import Loading from '../components/Loading'
 import ErrorState from '../components/ErrorState'
 
-function MacroBar({ label, consumido, objetivo, color }) {
+const MACRO_COLOR = {
+  'Proteína': 'var(--accent)',
+  'Carbohidratos': 'var(--text-muted)',
+  'Grasas': 'var(--accent-dim)',
+}
+
+function MacroBar({ label, consumido, objetivo }) {
   const pct = objetivo > 0 ? Math.min((consumido / objetivo) * 100, 100) : 0
   const over = objetivo > 0 && consumido > objetivo
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
         <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{label}</span>
-        <span style={{ fontSize: '0.82rem', color: over ? '#f87171' : 'var(--text-muted)' }}>
+        <span className="num" style={{ fontSize: '0.82rem', color: over ? 'var(--data-bad)' : 'var(--text-muted)' }}>
           {consumido}g <span style={{ color: 'var(--text-dim)' }}>/ {objetivo}g</span>
         </span>
       </div>
       <div style={{
-        height: 6,
+        height: 5,
         background: 'var(--border)',
-        borderRadius: 3,
+        borderRadius: 'var(--r-sm)',
         overflow: 'hidden',
       }}>
         <div style={{
           width: `${pct}%`,
           height: '100%',
-          background: over ? '#f87171' : color,
-          borderRadius: 3,
+          background: over ? 'var(--data-bad)' : MACRO_COLOR[label] || 'var(--accent)',
+          borderRadius: 'var(--r-sm)',
           transition: 'width 0.4s ease',
         }} />
       </div>
@@ -34,21 +40,19 @@ function MacroBar({ label, consumido, objetivo, color }) {
 }
 
 function KcalRing({ consumido, objetivo }) {
-  const pct = objetivo > 0 ? Math.min((consumido / objetivo) * 100, 100) : 0
   const over = consumido > objetivo
   const delta = consumido - objetivo
   return (
     <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
-      <div style={{ fontSize: '2.2rem', fontWeight: 700, color: over ? '#f87171' : 'var(--text)' }}>
+      <div className="num" style={{ fontSize: '2.2rem', fontWeight: 600, color: 'var(--text)' }}>
         {consumido}
       </div>
-      <div style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginBottom: 6 }}>
+      <div className="label" style={{ marginBottom: 6 }}>
         kcal de {objetivo}
       </div>
-      <div style={{
+      <div className="num" style={{
         fontSize: '0.85rem',
-        color: delta < 0 ? 'var(--text-muted)' : '#f87171',
-        fontWeight: 500,
+        color: over ? 'var(--data-bad)' : 'var(--text-muted)',
       }}>
         {delta >= 0 ? `+${delta}` : delta} kcal vs objetivo
       </div>
@@ -67,13 +71,14 @@ function SemanaChart({ dias, objetivo }) {
           const isToday = d.fecha === new Date().toISOString().split('T')[0]
           return (
             <div key={d.fecha} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>{d.kcal > 0 ? d.kcal : ''}</span>
+              <span className="num" style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>{d.kcal > 0 ? d.kcal : ''}</span>
               <div style={{
                 width: '100%',
                 height: h,
-                background: isToday ? 'var(--accent)' : over ? '#ef444466' : 'var(--accent)55',
-                borderRadius: '3px 3px 0 0',
-                border: isToday ? '1px solid var(--accent-light)' : 'none',
+                background: isToday ? 'var(--accent)' : over ? 'var(--data-bad)' : 'var(--bg-card-raised)',
+                opacity: isToday ? 1 : over ? 0.55 : 1,
+                borderRadius: 'var(--r-sm) var(--r-sm) 0 0',
+                border: isToday ? 'none' : '1px solid var(--border)',
               }} />
             </div>
           )
@@ -84,11 +89,11 @@ function SemanaChart({ dias, objetivo }) {
           const isToday = d.fecha === new Date().toISOString().split('T')[0]
           const label = new Date(d.fecha + 'T12:00').toLocaleDateString('es', { weekday: 'short' })
           return (
-            <div key={d.fecha} style={{
+            <div key={d.fecha} className="num" style={{
               flex: 1,
               textAlign: 'center',
               fontSize: '0.65rem',
-              color: isToday ? 'var(--accent-soft)' : 'var(--text-dim)',
+              color: isToday ? 'var(--accent)' : 'var(--text-dim)',
               fontWeight: isToday ? 600 : 400,
             }}>
               {label}
@@ -102,31 +107,23 @@ function SemanaChart({ dias, objetivo }) {
 
 const PROPOSITO_LABEL = {
   inicio_dia: 'Inicio del día',
-  pre_entreno: '⚡ Pre-entreno',
-  post_entreno: '💪 Post-entreno',
+  pre_entreno: 'Pre-entreno',
+  post_entreno: 'Post-entreno',
   media_manana: 'Media mañana',
   almuerzo: 'Almuerzo',
   merienda: 'Merienda',
   cena: 'Cena',
 }
 
-const PROPOSITO_COLOR = {
-  pre_entreno: '#f59e0b',
-  post_entreno: '#34d399',
-}
-
 function TomaPlan({ toma }) {
-  const color = PROPOSITO_COLOR[toma.proposito]
   const label = PROPOSITO_LABEL[toma.proposito] || toma.nombre
   return (
-    <Card style={{ marginBottom: 8, borderLeft: color ? `3px solid ${color}` : undefined }}>
+    <Card style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, fontSize: '0.92rem' }}>{toma.hora}</span>
-            <span style={{ fontSize: '0.85rem', color: color || 'var(--text-muted)', fontWeight: 500 }}>
-              {label}
-            </span>
+            <span className="num" style={{ fontWeight: 600, fontSize: '0.92rem' }}>{toma.hora}</span>
+            <span className="label">{label}</span>
           </div>
           {toma.ejemplos?.length > 0 && (
             <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 3 }}>
@@ -135,8 +132,8 @@ function TomaPlan({ toma }) {
           )}
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{toma.kcal} kcal</div>
-          <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+          <div className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{toma.kcal} kcal</div>
+          <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
             P{toma.proteinas_g} C{toma.carbos_g} G{toma.grasas_g}
           </div>
         </div>
@@ -195,10 +192,10 @@ export default function Nutricion() {
 
   return (
     <div style={{ padding: '20px 16px', maxWidth: 600, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.2rem', fontWeight: 600, margin: '0 0 4px', color: 'var(--text)' }}>
+      <h1 style={{ fontSize: '1.2rem', margin: '0 0 4px', color: 'var(--text)' }}>
         Nutrición
       </h1>
-      <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', margin: '0 0 20px' }}>
+      <p className="num" style={{ color: 'var(--text-dim)', fontSize: '0.82rem', margin: '0 0 20px' }}>
         Hoy · {hoy.fecha}
       </p>
 
@@ -206,10 +203,10 @@ export default function Nutricion() {
       {timing ? (
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <h2 style={{ fontSize: '0.9rem', fontWeight: 600, margin: 0, color: 'var(--text-muted)' }}>
+            <h2 className="label" style={{ margin: 0 }}>
               Plan de comidas de hoy
               {timing.hora_entreno && (
-                <span style={{ color: 'var(--text-dim)', fontWeight: 400, marginLeft: 8 }}>
+                <span className="num" style={{ color: 'var(--text-dim)', fontWeight: 400, marginLeft: 8, textTransform: 'none', letterSpacing: 0 }}>
                   · entreno {timing.hora_entreno}
                 </span>
               )}
@@ -218,9 +215,10 @@ export default function Nutricion() {
               onClick={generarPlan}
               disabled={timingLoading}
               style={{
-                background: 'none', border: '1px solid var(--border)',
-                color: 'var(--text-dim)', borderRadius: 6, padding: '3px 10px',
-                fontSize: '0.75rem', cursor: 'pointer', opacity: timingLoading ? 0.5 : 1,
+                background: 'none', border: '1px solid var(--border-strong)',
+                color: 'var(--text-dim)', borderRadius: 'var(--r-sm)', padding: '3px 10px',
+                fontSize: '0.7rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                cursor: 'pointer', opacity: timingLoading ? 0.5 : 1,
               }}
             >
               {timingLoading ? '...' : 'Regenerar'}
@@ -242,8 +240,9 @@ export default function Nutricion() {
             onClick={generarPlan}
             disabled={timingLoading}
             style={{
-              background: 'var(--accent)', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '8px 18px', fontSize: '0.85rem',
+              background: 'transparent', color: 'var(--accent)', border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--r-sm)', padding: '8px 18px', fontSize: '0.8rem',
+              fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em',
               cursor: 'pointer', opacity: timingLoading ? 0.6 : 1,
             }}
           >
@@ -254,11 +253,11 @@ export default function Nutricion() {
 
       <Card style={{ marginBottom: 12 }}>
         <KcalRing consumido={consumido.kcal} objetivo={objetivo.kcal} />
-        <MacroBar label="Proteína" consumido={consumido.proteinas_g} objetivo={objetivo.proteinas_g} color="#818cf8" />
-        <MacroBar label="Carbohidratos" consumido={consumido.carbos_g} objetivo={objetivo.carbos_g} color="#34d399" />
-        <MacroBar label="Grasas" consumido={consumido.grasas_g} objetivo={objetivo.grasas_g} color="#fb923c" />
+        <MacroBar label="Proteína" consumido={consumido.proteinas_g} objetivo={objetivo.proteinas_g} />
+        <MacroBar label="Carbohidratos" consumido={consumido.carbos_g} objetivo={objetivo.carbos_g} />
+        <MacroBar label="Grasas" consumido={consumido.grasas_g} objetivo={objetivo.grasas_g} />
         {objetivo.fecha_calculo && (
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.72rem', margin: '8px 0 0', textAlign: 'right' }}>
+          <p className="num" style={{ color: 'var(--text-dim)', fontSize: '0.72rem', margin: '8px 0 0', textAlign: 'right' }}>
             Objetivo calculado por IA · {objetivo.fecha_calculo}
           </p>
         )}
@@ -266,7 +265,7 @@ export default function Nutricion() {
 
       {semana && (
         <Card style={{ marginBottom: 12 }}>
-          <h2 style={{ fontSize: '0.9rem', fontWeight: 600, margin: '0 0 14px', color: 'var(--text-muted)' }}>
+          <h2 className="label" style={{ margin: '0 0 14px' }}>
             Última semana
           </h2>
           <SemanaChart dias={semana.dias} objetivo={semana.objetivo} />
@@ -275,7 +274,7 @@ export default function Nutricion() {
 
       {comidas.length > 0 && (
         <div>
-          <h2 style={{ fontSize: '0.9rem', fontWeight: 600, margin: '16px 0 10px', color: 'var(--text-muted)' }}>
+          <h2 className="label" style={{ margin: '16px 0 10px' }}>
             Comidas de hoy
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -284,14 +283,14 @@ export default function Nutricion() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
                     <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{c.alimento}</div>
-                    <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 2 }}>
+                    <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 2 }}>
                       {c.hora} · {c.tipo_comida}
                       {c.cantidad_g_ml > 0 && ` · ${c.cantidad_g_ml}g`}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.calorias} kcal</div>
-                    <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                    <div className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.calorias} kcal</div>
+                    <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                       P{c.proteinas_g} C{c.carbos_g} G{c.grasas_g}
                     </div>
                   </div>
