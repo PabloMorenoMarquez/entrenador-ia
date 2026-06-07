@@ -272,8 +272,12 @@ def construir_prompt(
                 "## Rutina semanal guardada por el usuario (fuente de verdad)\n"
                 "Esta es la rutina EXACTA que el usuario tiene guardada ahora mismo. "
                 "Si te pregunta qué rutina tiene o le pides que la recuerdes, usa SOLO esto — "
-                "no inventes ni reconstruyas de memoria. Si te pide editarla, edita solo lo que pide "
-                "y conserva el resto tal cual.\n" + texto_rutina_plan
+                "no inventes ni reconstruyas de memoria.\n"
+                "IMPORTANTE — no puedes guardar cambios: no tienes forma de escribir en la base de "
+                "datos del usuario. Si pide editar/cambiar un ejercicio o día, NUNCA digas que ya lo "
+                "has actualizado o guardado (sería falso). En su lugar: propón el cambio concreto "
+                "(qué ejercicio, qué día, series/reps) y dile que lo aplique en la vista Rutina de la "
+                "app, donde puede editar cada día directamente.\n" + texto_rutina_plan
             )
 
     # --- Plan nutricional con timing (Fase 5) ---
