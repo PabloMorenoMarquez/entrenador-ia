@@ -12,3 +12,10 @@ data/libros/
 .DS_Store
 frontend/node_modules/
 frontend/dist/
+
+# Android build outputs / wrapper (regenerable, no source)
+android/app/build/
+android/build/
+android/.gradle/
+android/gradle/wrapper/gradle-wrapper.jar
+android/local.properties

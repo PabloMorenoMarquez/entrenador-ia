@@ -10,11 +10,11 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.json.JSONObject
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.Duration
 
 class HealthSyncWorker(
     context: Context,
@@ -27,20 +27,15 @@ class HealthSyncWorker(
     }
 
     override suspend fun doWork(): Result {
-        val sdkStatus = HealthConnectClient.getSdkStatus(applicationContext)
-        if (sdkStatus != HealthConnectClient.SDK_AVAILABLE) {
-            Log.w(TAG, "Health Connect no disponible (status=$sdkStatus)")
+        if (HealthConnectClient.getSdkStatus(applicationContext) != HealthConnectClient.SDK_AVAILABLE) {
+            Log.w(TAG, "Health Connect no disponible")
             return Result.failure()
         }
 
         val client = HealthConnectClient.getOrCreate(applicationContext)
-
-        // Ventana: últimas 26h para capturar sueño nocturno completo
         val now = Instant.now()
         val windowStart = now.minus(Duration.ofHours(26))
         val timeRange = TimeRangeFilter.between(windowStart, now)
-
-        // Fecha reportada = ayer (los datos son del ciclo sueño+día de ayer)
         val fecha = LocalDate.now().minusDays(1).toString()
 
         val payload = JSONObject().apply {
@@ -48,7 +43,7 @@ class HealthSyncWorker(
             put("fecha", fecha)
         }
 
-        // ---- Pasos y calorías activas (agregación) ----
+        // ---- Pasos y calorías activas ----
         try {
             val agg = client.aggregate(
                 AggregateRequest(
@@ -63,7 +58,7 @@ class HealthSyncWorker(
             agg[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]
                 ?.inKilocalories?.let { payload.put("kcal_activas", it.toInt()) }
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo pasos/calorías: ${e.message}")
+            Log.w(TAG, "Error pasos/calorías: ${e.message}")
         }
 
         // ---- FC en reposo ----
@@ -76,7 +71,7 @@ class HealthSyncWorker(
                 payload.put("fc_reposo", avg)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo FC reposo: ${e.message}")
+            Log.w(TAG, "Error FC reposo: ${e.message}")
         }
 
         // ---- HRV ----
@@ -89,7 +84,7 @@ class HealthSyncWorker(
                 payload.put("hrv", avg)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo HRV: ${e.message}")
+            Log.w(TAG, "Error HRV: ${e.message}")
         }
 
         // ---- SpO2 ----
@@ -102,7 +97,7 @@ class HealthSyncWorker(
                 payload.put("spo2", avg)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo SpO2: ${e.message}")
+            Log.w(TAG, "Error SpO2: ${e.message}")
         }
 
         // ---- Sueño ----
@@ -112,43 +107,43 @@ class HealthSyncWorker(
             ).records
 
             if (sessions.isNotEmpty()) {
-                // Sesión principal = la más larga
-                val main = sessions.maxByOrNull {
-                    Duration.between(it.startTime, it.endTime).toMillis()
+                val main: SleepSessionRecord = sessions.maxByOrNull { s: SleepSessionRecord ->
+                    Duration.between(s.startTime, s.endTime).toMillis()
                 }!!
 
                 val totalMin = Duration.between(main.startTime, main.endTime).toMinutes()
-                val totalHoras = totalMin / 60.0
+                payload.put("sueno_horas", Math.round((totalMin / 60.0) * 10.0) / 10.0)
 
-                var remMin = 0L
-                var profundoMin = 0L
-                main.stages.forEach { stage ->
-                    val dur = Duration.between(stage.startTime, stage.endTime).toMinutes()
-                    when (stage.stage) {
-                        SleepSessionRecord.STAGE_TYPE_REM -> remMin += dur
-                        SleepSessionRecord.STAGE_TYPE_DEEP -> profundoMin += dur
-                    }
-                }
-
-                val fmt = DateTimeFormatter.ofPattern("HH:mm")
-                    .withZone(ZoneId.systemDefault())
-
-                payload.put("sueno_horas", Math.round(totalHoras * 10.0) / 10.0)
+                val fmt = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
                 payload.put("hora_acostarse", fmt.format(main.startTime))
                 payload.put("hora_despertar", fmt.format(main.endTime))
-                payload.put("rem_min", remMin.toInt())
-                payload.put("profundo_min", profundoMin.toInt())
+
+                // Sleep stages
+                try {
+                    var remMin = 0L
+                    var profundoMin = 0L
+                    for (stage in main.stages) {
+                        val dur = Duration.between(stage.startTime, stage.endTime).toMinutes()
+                        when (stage.stage) {
+                            SleepSessionRecord.STAGE_TYPE_REM -> remMin += dur
+                            SleepSessionRecord.STAGE_TYPE_DEEP -> profundoMin += dur
+                        }
+                    }
+                    payload.put("rem_min", remMin.toInt())
+                    payload.put("profundo_min", profundoMin.toInt())
+                } catch (e: Exception) {
+                    Log.d(TAG, "Stages no disponibles: ${e.message}")
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error leyendo sueño: ${e.message}")
+            Log.w(TAG, "Error sueño: ${e.message}")
         }
 
-        // ---- POST al backend ----
+        // ---- POST ----
         return try {
             val ok = ApiClient.postBiometricos(payload)
             if (ok) {
-                Log.i(TAG, "Sync OK — fecha=$fecha payload=$payload")
-                // Guarda timestamp para mostrar en MainActivity
+                Log.i(TAG, "Sync OK — $fecha $payload")
                 applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
                     .edit()
                     .putLong("last_sync_ts", System.currentTimeMillis())
@@ -156,11 +151,11 @@ class HealthSyncWorker(
                     .apply()
                 Result.success()
             } else {
-                Log.w(TAG, "Backend devolvió error — reintentando")
+                Log.w(TAG, "Backend error — reintentando")
                 Result.retry()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error POST biométricos: ${e.message}")
+            Log.e(TAG, "Error POST: ${e.message}")
             Result.retry()
         }
     }

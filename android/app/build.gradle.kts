@@ -13,12 +13,12 @@ val localProps = Properties().also { props ->
 
 android {
     namespace = "com.entrenador.ia"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.entrenador.ia"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 

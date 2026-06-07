@@ -54,8 +54,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkAndInit() {
-        val status = HealthConnectClient.getSdkStatus(this)
-        if (status != HealthConnectClient.SDK_AVAILABLE) {
+        if (HealthConnectClient.getSdkStatus(this) != HealthConnectClient.SDK_AVAILABLE) {
             binding.tvEstado.text = "Health Connect no disponible en este dispositivo."
             return
         }
@@ -65,7 +64,6 @@ class MainActivity : AppCompatActivity() {
             if (granted.containsAll(PERMISOS)) {
                 scheduleSync()
             }
-            // No solicitar automáticamente — requiere gesto del usuario
         }
     }
 
@@ -120,7 +118,7 @@ class MainActivity : AppCompatActivity() {
                         updateStatus()
                     }
                     WorkInfo.State.FAILED -> {
-                        Toast.makeText(this, "Error en sync — revisa conexión o API key", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Error — revisa conexión o API key", Toast.LENGTH_LONG).show()
                         updateStatus()
                     }
                     else -> {}
@@ -133,11 +131,11 @@ class MainActivity : AppCompatActivity() {
         val ts = prefs.getLong("last_sync_ts", 0L)
         val fecha = prefs.getString("last_sync_fecha", null)
 
-        if (ts == 0L) {
-            binding.tvEstado.text = "Sin sincronizaciones todavía."
+        binding.tvEstado.text = if (ts == 0L) {
+            "Sin sincronizaciones todavía."
         } else {
             val hora = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts))
-            binding.tvEstado.text = "Último sync: $fecha a las $hora"
+            "Último sync: $fecha a las $hora"
         }
         binding.tvUrl.text = "Backend: ${BuildConfig.API_BASE_URL}"
     }
