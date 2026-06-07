@@ -301,7 +301,14 @@ def construir_prompt(
                     lineas_plan.append(f"  Ej: {', '.join(ejemplos[:2])}")
             if notas_plan:
                 lineas_plan.append(f"Nota: {notas_plan}")
-            bloques.append("## Plan nutricional de hoy\n" + "\n".join(lineas_plan))
+            bloques.append(
+                "## Plan nutricional de hoy (fuente de verdad)\n"
+                "Estos son los horarios y macros de comida que el usuario YA tiene guardados/calculados "
+                "para hoy. Si te pregunta por horarios de comidas, ritmos circadianos o cómo organizar "
+                "su día, USA ESTO como base — no inventes horarios nuevos desde cero ni ignores este "
+                "plan. Si propones ajustes, parte de estos horarios y justifica el cambio explícitamente.\n"
+                + "\n".join(lineas_plan)
+            )
 
     # --- Análisis del motor (solo si se ejecutó) ---
     if motor_output:
