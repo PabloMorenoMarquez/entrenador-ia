@@ -56,39 +56,49 @@ async def llamar_llm(
     ultimo_error = None
 
     for modelo in modelos:
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                body: dict = {
-                    "model": modelo,
-                    "max_tokens": max_tokens,
-                    "messages": mensajes,
-                }
-                if response_format:
-                    body["response_format"] = response_format
-                response = await client.post(
-                    OPENROUTER_URL,
-                    headers=_get_headers(),
-                    json=body,
-                )
+        # Si pedimos JSON forzado, probamos primero con response_format y,
+        # si el modelo lo rechaza (400), reintentamos el MISMO modelo sin él
+        # antes de pasar al siguiente (evita quemar el fallback en vano).
+        formatos = [response_format, None] if response_format else [None]
 
-                if response.status_code == 429:
-                    ultimo_error = f"429 en {modelo}"
-                    await asyncio.sleep(pausa_entre_intentos)
-                    continue
+        for formato in formatos:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    body: dict = {
+                        "model": modelo,
+                        "max_tokens": max_tokens,
+                        "messages": mensajes,
+                    }
+                    if formato:
+                        body["response_format"] = formato
+                    response = await client.post(
+                        OPENROUTER_URL,
+                        headers=_get_headers(),
+                        json=body,
+                    )
 
-                response.raise_for_status()
-                data = response.json()
-                msg = data["choices"][0]["message"]
-                # Thinking models return content=null and put output in reasoning
-                content = msg.get("content") or msg.get("reasoning") or ""
-                return content
+                    if response.status_code == 429:
+                        ultimo_error = f"429 en {modelo}"
+                        await asyncio.sleep(pausa_entre_intentos)
+                        break  # no insistir sin formato ante rate-limit; pasar al siguiente modelo
 
-        except httpx.HTTPStatusError as e:
-            ultimo_error = str(e)
-            await asyncio.sleep(pausa_entre_intentos)
-            continue
-        except Exception as e:
-            ultimo_error = str(e)
-            continue
+                    if response.status_code == 400 and formato:
+                        ultimo_error = f"400 en {modelo} con response_format — reintentando sin él"
+                        continue  # probar el siguiente "formato" (None) en el mismo modelo
+
+                    response.raise_for_status()
+                    data = response.json()
+                    msg = data["choices"][0]["message"]
+                    # Thinking models return content=null and put output in reasoning
+                    content = msg.get("content") or msg.get("reasoning") or ""
+                    return content
+
+            except httpx.HTTPStatusError as e:
+                ultimo_error = str(e)
+                await asyncio.sleep(pausa_entre_intentos)
+                break
+            except Exception as e:
+                ultimo_error = str(e)
+                break
 
     raise RuntimeError(f"Todos los modelos fallaron. Último error: {ultimo_error}")
