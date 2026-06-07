@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { postChat } from '../api/client'
+import { postChat, getChatHistorial } from '../api/client'
 import Markdown from '../components/Markdown'
 
 function TypingDots() {
@@ -63,12 +63,29 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [cargandoHistorial, setCargandoHistorial] = useState(true)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    let cancelado = false
+    getChatHistorial(30)
+      .then(historial => {
+        if (cancelado || !Array.isArray(historial)) return
+        setMessages(historial.map((m, i) => ({
+          role: m.rol === 'assistant' ? 'assistant' : 'user',
+          content: m.contenido,
+          id: `hist-${i}`,
+        })))
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelado) setCargandoHistorial(false) })
+    return () => { cancelado = true }
+  }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: cargandoHistorial ? 'auto' : 'smooth' })
+  }, [messages, cargandoHistorial])
 
   const autoResize = () => {
     const ta = textareaRef.current

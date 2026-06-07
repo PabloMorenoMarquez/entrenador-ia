@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { Gauge, ClipboardCheck, Utensils, MessageSquare, User } from 'lucide-react'
+import { Gauge, ClipboardCheck, Dumbbell, Utensils, MessageSquare, User } from 'lucide-react'
 
 const tabs = [
   { to: '/dashboard', label: 'Inicio', Icon: Gauge },
   { to: '/checkin', label: 'Check-in', Icon: ClipboardCheck },
+  { to: '/rutina', label: 'Rutina', Icon: Dumbbell },
   { to: '/nutricion', label: 'Nutrición', Icon: Utensils },
   { to: '/chat', label: 'Chat', Icon: MessageSquare },
   { to: '/perfil', label: 'Perfil', Icon: User },

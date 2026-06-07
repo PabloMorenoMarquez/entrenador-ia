@@ -121,6 +121,15 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+@app.get("/api/chat/historial")
+async def get_chat_historial(limite: int = 30):
+    try:
+        from memory.conectar_sheets import leer_conversaciones
+        return await leer_conversaciones(limite=limite)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

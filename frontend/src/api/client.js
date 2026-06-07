@@ -22,6 +22,7 @@ export const getNutricionHoy = () => apiFetch('/api/nutricion/hoy')
 export const getNutricionSemana = () => apiFetch('/api/nutricion/semana')
 export const getHistorial = () => apiFetch('/api/historial')
 export const postChat = (mensaje) => apiFetch('/chat', { method: 'POST', body: JSON.stringify({ mensaje }) })
+export const getChatHistorial = (limite = 30) => apiFetch(`/api/chat/historial?limite=${limite}`)
 
 // Fase 1: recuperación y biométricos
 export const getCheckinHoy = () => apiFetch('/api/checkin/hoy')
