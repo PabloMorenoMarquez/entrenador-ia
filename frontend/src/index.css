@@ -15,9 +15,6 @@
   /* acento único */
   --accent: #56b3c7;
   --accent-dim: #3d7e8c;
-  /* alias compat — refs existentes en vistas; se sustituyen al rediseñar cada vista */
-  --accent-light: var(--accent);
-  --accent-soft: var(--accent);
 
   /* datos (semántico, no decorativo) */
   --data-good: #6cc788;
