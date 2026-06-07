@@ -86,6 +86,19 @@ class DolorRequest(BaseModel):
     fecha: Optional[str] = None
 
 
+class RutinaPlanEjercicio(BaseModel):
+    ejercicio: str
+    grupo_muscular: Optional[str] = None
+    series_objetivo: Optional[int] = None
+    reps_objetivo: Optional[str] = None
+    notas: Optional[str] = None
+
+
+class RutinaPlanDiaRequest(BaseModel):
+    dia_semana: str
+    ejercicios: list[RutinaPlanEjercicio]
+
+
 def _validar_api_key(x_api_key: Optional[str]) -> None:
     """Valida API key para endpoints sensibles (Watch, app Android)."""
     expected = os.environ.get("API_KEY", "")
@@ -157,6 +170,27 @@ async def get_rutina():
         return data
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rutina/plan")
+async def get_rutina_plan():
+    try:
+        from memory.lectura_estructurada import leer_rutina_plan
+        return await leer_rutina_plan()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rutina/plan")
+async def post_rutina_plan(request: RutinaPlanDiaRequest):
+    try:
+        from memory.lectura_estructurada import guardar_rutina_plan_dia, leer_rutina_plan
+        await guardar_rutina_plan_dia(request.dia_semana, [e.dict() for e in request.ejercicios])
+        return await leer_rutina_plan()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

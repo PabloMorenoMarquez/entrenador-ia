@@ -143,6 +143,44 @@ def _leer_rutina_sync() -> dict:
     return {"sesion_id": ultimo_sesion_id, "fecha": fecha, "ejercicios": ejercicios}
 
 
+# ---- plan de rutina semanal (objetivo vs realidad) ----
+
+DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
+
+def _leer_rutina_plan_sync() -> dict:
+    from db.repositorio import leer_rutina_plan_sb, leer_ultimas_ejecuciones_sb
+
+    plan = leer_rutina_plan_sb()
+    nombres = [ej["ejercicio"] for ejercicios in plan.values() for ej in ejercicios if ej.get("ejercicio")]
+    ultimas = leer_ultimas_ejecuciones_sb(nombres)
+
+    dias = {}
+    for dia in DIAS_SEMANA:
+        ejercicios = plan.get(dia, [])
+        dias[dia] = [{
+            **ej,
+            "ultima_vez": ultimas.get(ej["ejercicio"].strip().lower()),
+        } for ej in ejercicios]
+
+    return {"dias": dias}
+
+
+def _guardar_rutina_plan_dia_sync(dia_semana: str, ejercicios: list) -> None:
+    from db.repositorio import guardar_rutina_plan_dia
+    guardar_rutina_plan_dia(dia_semana, ejercicios)
+
+
+async def leer_rutina_plan() -> dict:
+    return await asyncio.to_thread(_leer_rutina_plan_sync)
+
+
+async def guardar_rutina_plan_dia(dia_semana: str, ejercicios: list) -> None:
+    if dia_semana not in DIAS_SEMANA:
+        raise ValueError(f"Día inválido: '{dia_semana}'. Válidos: {DIAS_SEMANA}")
+    await asyncio.to_thread(_guardar_rutina_plan_dia_sync, dia_semana, ejercicios)
+
+
 # ---- nutrición ----
 
 def _sumar_macros(filas: list[dict]) -> dict:

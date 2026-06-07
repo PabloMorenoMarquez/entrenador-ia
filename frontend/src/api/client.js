@@ -15,6 +15,9 @@ async function apiFetch(path, opts = {}) {
 export const getPerfil = () => apiFetch('/api/perfil')
 export const postPerfil = (campos) => apiFetch('/api/perfil', { method: 'POST', body: JSON.stringify({ campos }) })
 export const getRutina = () => apiFetch('/api/rutina')
+export const getRutinaPlan = () => apiFetch('/api/rutina/plan')
+export const postRutinaPlanDia = (dia_semana, ejercicios) =>
+  apiFetch('/api/rutina/plan', { method: 'POST', body: JSON.stringify({ dia_semana, ejercicios }) })
 export const getNutricionHoy = () => apiFetch('/api/nutricion/hoy')
 export const getNutricionSemana = () => apiFetch('/api/nutricion/semana')
 export const getHistorial = () => apiFetch('/api/historial')

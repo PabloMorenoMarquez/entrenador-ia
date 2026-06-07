@@ -648,6 +648,81 @@ def leer_rutina_sb() -> Optional[dict]:
     return {"sesion_id": sesion_id, "fecha": fecha, "ejercicios": ejercicios}
 
 
+# ─────────────────────────────────────────
+# PLAN DE RUTINA SEMANAL (objetivo vs realidad)
+# ─────────────────────────────────────────
+
+def guardar_rutina_plan_dia(dia_semana: str, ejercicios: list[dict]) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("rutina_plan").delete().eq("user_id", uid).eq("dia_semana", dia_semana).execute()
+    if not ejercicios:
+        return
+    rows = [{
+        "user_id": uid,
+        "dia_semana": dia_semana,
+        "orden": i + 1,
+        "ejercicio": ej.get("ejercicio") or "",
+        "grupo_muscular": ej.get("grupo_muscular") or None,
+        "series_objetivo": ej.get("series_objetivo") or None,
+        "reps_objetivo": ej.get("reps_objetivo") or None,
+        "notas": ej.get("notas") or None,
+    } for i, ej in enumerate(ejercicios)]
+    sb.table("rutina_plan").insert(rows).execute()
+
+
+def leer_rutina_plan_sb() -> dict:
+    sb = get_client()
+    uid = get_user_id()
+    r = (
+        sb.table("rutina_plan").select("*")
+        .eq("user_id", uid).order("dia_semana").order("orden")
+        .execute()
+    )
+    dias: dict = {}
+    for fila in (r.data or []):
+        dia = fila.get("dia_semana") or ""
+        dias.setdefault(dia, []).append({
+            "orden": fila.get("orden") or 0,
+            "ejercicio": fila.get("ejercicio") or "",
+            "grupo_muscular": fila.get("grupo_muscular") or "",
+            "series_objetivo": fila.get("series_objetivo"),
+            "reps_objetivo": fila.get("reps_objetivo") or "",
+            "notas": fila.get("notas") or "",
+        })
+    return dias
+
+
+def leer_ultimas_ejecuciones_sb(nombres: list) -> dict:
+    """Última ejecución registrada de cada ejercicio (por nombre, case-insensitive).
+    Permite comparar el objetivo del plan con lo realmente hecho la última vez."""
+    if not nombres:
+        return {}
+    sb = get_client()
+    uid = get_user_id()
+    r = (
+        sb.table("ejercicios_detalle")
+        .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir")
+        .eq("user_id", uid)
+        .order("fecha", desc=True)
+        .limit(400)
+        .execute()
+    )
+    objetivo_lower = {n.strip().lower() for n in nombres}
+    resultado: dict = {}
+    for fila in (r.data or []):
+        clave = (fila.get("ejercicio") or "").strip().lower()
+        if clave in objetivo_lower and clave not in resultado:
+            resultado[clave] = {
+                "fecha": fila.get("fecha") or "",
+                "series": fila.get("series") or 0,
+                "reps_realizadas": fila.get("reps_realizadas") or "",
+                "peso_kg": fila.get("peso_kg") or 0,
+                "rir": fila.get("rir"),
+            }
+    return resultado
+
+
 def leer_historial_sb(limite: int = 30) -> dict:
     sb = get_client()
     uid = get_user_id()
