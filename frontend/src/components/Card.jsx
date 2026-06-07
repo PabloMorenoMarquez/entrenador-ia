@@ -5,8 +5,8 @@ export default function Card({ children, style = {}, className = '' }) {
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '16px',
+        borderRadius: 'var(--r-md)',
+        padding: 'var(--sp-4)',
         ...style,
       }}
     >

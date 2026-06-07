@@ -1,18 +1,35 @@
-export default function Loading({ text = 'Cargando...' }) {
+function Bar({ width, delay }) {
+  return (
+    <div
+      className="pulse"
+      style={{
+        height: 8,
+        width,
+        borderRadius: 'var(--r-sm)',
+        background: 'var(--bg-card-raised)',
+        animationDelay: delay,
+      }}
+    />
+  )
+}
+
+export default function Loading({ text = 'Cargando' }) {
   return (
     <div style={{
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: 'column',
       gap: 8,
       padding: '40px 20px',
-      color: 'var(--text-dim)',
-      fontSize: '0.9rem',
+      alignItems: 'center',
     }}>
-      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0ms' }}>●</span>
-      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0.15s' }}>●</span>
-      <span style={{ animation: 'pulse 1.2s ease-in-out infinite', animationDelay: '0.3s' }}>●</span>
-      {text && <span style={{ marginLeft: 8 }}>{text}</span>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%', maxWidth: 220 }}>
+        <Bar width="100%" delay="0ms" />
+        <Bar width="70%" delay="120ms" />
+        <Bar width="85%" delay="240ms" />
+      </div>
+      {text && (
+        <span className="label" style={{ marginTop: 8 }}>{text}</span>
+      )}
     </div>
   )
 }

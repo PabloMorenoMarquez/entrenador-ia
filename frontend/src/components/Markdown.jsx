@@ -1,21 +1,22 @@
 import ReactMarkdown from 'react-markdown'
 
 const inlineCodeStyle = {
-  background: 'rgba(129,140,248,0.15)',
-  color: 'var(--accent-soft)',
-  borderRadius: 4,
+  background: 'var(--bg-card-raised)',
+  color: 'var(--accent)',
+  borderRadius: 'var(--r-sm)',
   padding: '1px 5px',
   fontSize: '0.85em',
-  fontFamily: 'Menlo, Consolas, monospace',
+  fontFamily: 'var(--font-mono)',
 }
 
 const blockCodeStyle = {
-  background: 'rgba(15,15,30,0.8)',
+  background: 'var(--bg-card-raised)',
   border: '1px solid var(--border)',
-  borderRadius: 8,
+  borderRadius: 'var(--r-md)',
   padding: '10px 14px',
   overflowX: 'auto',
   margin: '6px 0',
+  fontFamily: 'var(--font-mono)',
 }
 
 export default function Markdown({ children }) {
@@ -33,7 +34,7 @@ export default function Markdown({ children }) {
         // v10: use `pre` for block code, `code` only for inline
         pre: ({ children }) => <pre style={blockCodeStyle}>{children}</pre>,
         code: ({ children }) => <code style={inlineCodeStyle}>{children}</code>,
-        blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid var(--accent)', margin: '6px 0', paddingLeft: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>{children}</blockquote>,
+        blockquote: ({ children }) => <blockquote style={{ borderLeft: '2px solid var(--accent-dim)', margin: '6px 0', paddingLeft: 12, color: 'var(--text-muted)' }}>{children}</blockquote>,
       }}
     >
       {children}

@@ -1,34 +1,12 @@
 import { NavLink } from 'react-router-dom'
+import { Gauge, ClipboardCheck, Utensils, MessageSquare, User } from 'lucide-react'
 
 const tabs = [
-  { to: '/dashboard', label: 'Inicio', icon: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>
-  )},
-  { to: '/checkin', label: 'Check-in', icon: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-    </svg>
-  )},
-  { to: '/nutricion', label: 'Nutrición', icon: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
-      <path d="M12 6v6l4 2"/>
-    </svg>
-  )},
-  { to: '/chat', label: 'Chat', icon: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-  )},
-  { to: '/perfil', label: 'Perfil', icon: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
-    </svg>
-  )},
+  { to: '/dashboard', label: 'Inicio', Icon: Gauge },
+  { to: '/checkin', label: 'Check-in', Icon: ClipboardCheck },
+  { to: '/nutricion', label: 'Nutrición', Icon: Utensils },
+  { to: '/chat', label: 'Chat', Icon: MessageSquare },
+  { to: '/perfil', label: 'Perfil', Icon: User },
 ]
 
 export default function BottomNav() {
@@ -42,7 +20,7 @@ export default function BottomNav() {
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       flexShrink: 0,
     }}>
-      {tabs.map(({ to, label, icon }) => (
+      {tabs.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
           to={to}
@@ -51,22 +29,24 @@ export default function BottomNav() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 3,
+            gap: 4,
             paddingTop: 10,
             paddingBottom: 10,
             flex: 1,
             textDecoration: 'none',
             color: isActive ? 'var(--accent)' : 'var(--text-dim)',
-            fontSize: '0.68rem',
-            fontWeight: isActive ? 600 : 500,
-            letterSpacing: '0.02em',
-            transition: 'color 0.15s',
-            borderTop: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.62rem',
+            fontWeight: 500,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            transition: `color ${'var(--t-base)'}`,
+            borderTop: isActive ? '1px solid var(--accent)' : '1px solid transparent',
             cursor: 'pointer',
             minHeight: 52,
           })}
         >
-          {icon}
+          <Icon size={20} strokeWidth={1.5} />
           {label}
         </NavLink>
       ))}
