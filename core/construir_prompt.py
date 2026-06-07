@@ -81,7 +81,11 @@ def construir_sistema(
     if lesiones:
         directivas.append(
             f"LIMITACIONES ACTIVAS: {lesiones}. "
-            "Nunca prescribas el movimiento doloroso. Siempre ofrece variante segura."
+            "Nunca prescribas el movimiento doloroso. Antes de ofrecer una alternativa, "
+            "comprueba explícitamente que NO comparte el mismo patrón de movimiento ni "
+            "carga la misma zona afectada (ej.: si hay problema de coxis/lumbar, descarta "
+            "también ejercicios de bisagra de cadera, no solo el movimiento original). "
+            "Si dudas si una variante es segura, dilo y pregunta antes de prescribirla."
         )
 
     # Check-in de recuperación (Fase 1+)
