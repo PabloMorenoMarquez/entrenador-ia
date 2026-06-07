@@ -172,6 +172,7 @@ def construir_prompt(
     macros_recalculados: Optional[dict] = None,
     recuperacion: Optional[dict] = None,
     plan_nutricional: Optional[dict] = None,
+    rutina_plan: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -258,6 +259,18 @@ def construir_prompt(
         if notas:
             texto += f" {notas}"
         bloques.append(f"## Macros objetivo recalculados\n{texto}")
+
+    # --- Plan de rutina semanal guardado (ground truth, evita confabulación) ---
+    if rutina_plan:
+        texto_rutina_plan = _formatear_rutina_plan(rutina_plan)
+        if texto_rutina_plan:
+            bloques.append(
+                "## Rutina semanal guardada por el usuario (fuente de verdad)\n"
+                "Esta es la rutina EXACTA que el usuario tiene guardada ahora mismo. "
+                "Si te pregunta qué rutina tiene o le pides que la recuerdes, usa SOLO esto — "
+                "no inventes ni reconstruyas de memoria. Si te pide editarla, edita solo lo que pide "
+                "y conserva el resto tal cual.\n" + texto_rutina_plan
+            )
 
     # --- Plan nutricional con timing (Fase 5) ---
     if plan_nutricional:
@@ -384,6 +397,37 @@ def _formatear_comida_registrada(datos: dict) -> str:
     filas_guardadas = datos.get("filas_guardadas")
     if filas_guardadas:
         partes.append(f"Guardado: {filas_guardadas} alimento(s) en registro_comidas")
+    return "\n".join(partes)
+
+
+_DIAS_LABEL = {
+    "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
+    "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado", "domingo": "Domingo",
+}
+
+
+def _formatear_rutina_plan(rutina_plan: dict) -> str:
+    """Formatea el plan de rutina semanal guardado (objetivo por día) para el prompt."""
+    dias = rutina_plan.get("dias") or {}
+    partes = []
+    for dia_key, label in _DIAS_LABEL.items():
+        ejercicios = dias.get(dia_key) or []
+        if not ejercicios:
+            continue
+        partes.append(f"{label}:")
+        for ej in ejercicios:
+            nombre = ej.get("ejercicio", "")
+            series = ej.get("series_objetivo")
+            reps = ej.get("reps_objetivo")
+            grupo = ej.get("grupo_muscular")
+            linea = f"  - {nombre}"
+            if series and reps:
+                linea += f": {series}x{reps}"
+            elif reps:
+                linea += f": {reps}"
+            if grupo:
+                linea += f" ({grupo})"
+            partes.append(linea)
     return "\n".join(partes)
 
 
