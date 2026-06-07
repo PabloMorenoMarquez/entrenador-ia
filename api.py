@@ -3,7 +3,7 @@ API principal del entrenador IA.
 Punto de entrada HTTP para todas las peticiones.
 """
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -97,13 +97,6 @@ class RutinaPlanEjercicio(BaseModel):
 class RutinaPlanDiaRequest(BaseModel):
     dia_semana: str
     ejercicios: list[RutinaPlanEjercicio]
-
-
-def _validar_api_key(x_api_key: Optional[str]) -> None:
-    """Valida API key para endpoints sensibles (Watch, app Android)."""
-    expected = os.environ.get("API_KEY", "")
-    if expected and x_api_key != expected:
-        raise HTTPException(status_code=401, detail="API key inválida.")
 
 
 # ---- Rutas chat ----
@@ -225,12 +218,8 @@ async def get_historial():
 # ---- Endpoints Fase 1: biométricos, check-in, medidas, hidratación, dolor ----
 
 @app.post("/api/biometricos")
-async def post_biometricos(
-    request: BiometricosRequest,
-    x_api_key: Optional[str] = Header(default=None),
-):
-    """Guarda biométricos (manual o Watch). Auth por X-API-Key cuando viene del Watch."""
-    _validar_api_key(x_api_key)
+async def post_biometricos(request: BiometricosRequest):
+    """Guarda biométricos (manual desde la web o Watch/Android)."""
     try:
         from db.repositorio import guardar_biometricos
         datos = {k: v for k, v in request.model_dump().items() if v is not None}
