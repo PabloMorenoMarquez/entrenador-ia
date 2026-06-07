@@ -2,17 +2,16 @@ import { useState, useEffect } from 'react'
 import { getCheckinHoy, postCheckin, getBiometricosHoy, postBiometricos, postMedidas, postDolor } from '../api/client'
 import Card from '../components/Card'
 
-function SliderField({ label, name, value, onChange, min = 1, max = 5, emoji }) {
+const SLIDER_RAMP = ['var(--data-bad)', 'var(--data-warn)', 'var(--text-muted)', 'var(--accent)', 'var(--data-good)']
+
+function SliderField({ label, name, value, onChange, min = 1, max = 5 }) {
   const pct = ((value - min) / (max - min)) * 100
-  const colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e']
-  const color = colors[Math.round((value - min) / (max - min) * (colors.length - 1))]
+  const color = SLIDER_RAMP[Math.round((value - min) / (max - min) * (SLIDER_RAMP.length - 1))]
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <label style={{ fontSize: '0.88rem', color: 'var(--text-dim)' }}>
-          {emoji} {label}
-        </label>
-        <span style={{ fontWeight: 700, fontSize: '1rem', color }}>{value}/{max}</span>
+        <label className="label">{label}</label>
+        <span className="num" style={{ fontWeight: 600, fontSize: '1rem', color }}>{value}/{max}</span>
       </div>
       <input
         type="range" min={min} max={max} step={1} value={value}
@@ -34,12 +33,12 @@ function RecoveryScore({ checkin }) {
   const dolor_inv = checkin.dolor_muscular ? (6 - checkin.dolor_muscular) : null
   const all = dolor_inv ? [...vals, dolor_inv] : vals
   const score = Math.round((all.reduce((a, b) => a + b, 0) / all.length) * 20)
-  const color = score >= 70 ? '#22c55e' : score >= 45 ? '#eab308' : '#ef4444'
+  const color = score >= 70 ? 'var(--data-good)' : score >= 45 ? 'var(--data-warn)' : 'var(--data-bad)'
   const label = score >= 70 ? 'Bien recuperado' : score >= 45 ? 'Recuperación media' : 'Fatiga alta'
   return (
     <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
-      <div style={{ fontSize: '2.2rem', fontWeight: 800, color }}>{score}</div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: 2 }}>{label}</div>
+      <div className="num" style={{ fontSize: '2.2rem', fontWeight: 600, color }}>{score}</div>
+      <div className="label" style={{ marginTop: 4 }}>{label}</div>
     </div>
   )
 }
@@ -120,28 +119,29 @@ export default function Checkin() {
   return (
     <div style={{ padding: '20px 16px', maxWidth: 500, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-        <h1 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0, color: 'var(--text)' }}>
+        <h1 style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text)' }}>
           Check-in matutino
         </h1>
         {yaRegistrado && (
-          <span style={{ fontSize: '0.72rem', color: '#22c55e', background: '#22c55e18', borderRadius: 10, padding: '2px 8px' }}>
+          <span className="label" style={{ color: 'var(--data-good)', border: '1px solid var(--border-strong)', borderRadius: 'var(--r-sm)', padding: '2px 8px' }}>
             Registrado hoy
           </span>
         )}
       </div>
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: '0 0 20px' }}>
+      <p className="num" style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: '0 0 20px' }}>
         {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
       </p>
 
       {/* Selector de sección */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
         {[['checkin', 'Recuperación'], ['extras', 'Sueño & Medidas']].map(([id, label]) => (
-          <button key={id} onClick={() => setSeccion(id)} style={{
-            flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: seccion === id ? 'var(--accent)' : 'var(--bg-card)',
-            color: seccion === id ? '#fff' : 'var(--text-dim)',
-            fontWeight: seccion === id ? 600 : 400, fontSize: '0.83rem',
-            transition: 'all 0.15s',
+          <button key={id} onClick={() => setSeccion(id)} className="label" style={{
+            flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+            background: 'transparent',
+            color: seccion === id ? 'var(--accent)' : 'var(--text-dim)',
+            borderBottom: seccion === id ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: -1,
+            transition: 'color var(--t-base), border-color var(--t-base)',
           }}>{label}</button>
         ))}
       </div>
@@ -150,38 +150,38 @@ export default function Checkin() {
         <Card>
           <RecoveryScore checkin={checkin} />
           <div style={{ height: 1, background: 'var(--border)', margin: '12px 0 18px' }} />
-          <SliderField label="Fatiga general" name="fatiga" value={checkin.fatiga} onChange={handleSlider} emoji="😴" />
-          <SliderField label="Dolor muscular" name="dolor_muscular" value={checkin.dolor_muscular} onChange={handleSlider} emoji="💪" />
-          <SliderField label="Calidad del sueño" name="calidad_sueno" value={checkin.calidad_sueno} onChange={handleSlider} emoji="🌙" />
-          <SliderField label="Estado mental" name="estado_mental" value={checkin.estado_mental} onChange={handleSlider} emoji="🧠" />
+          <SliderField label="Fatiga general" name="fatiga" value={checkin.fatiga} onChange={handleSlider} />
+          <SliderField label="Dolor muscular" name="dolor_muscular" value={checkin.dolor_muscular} onChange={handleSlider} />
+          <SliderField label="Calidad del sueño" name="calidad_sueno" value={checkin.calidad_sueno} onChange={handleSlider} />
+          <SliderField label="Estado mental" name="estado_mental" value={checkin.estado_mental} onChange={handleSlider} />
         </Card>
       )}
 
       {seccion === 'extras' && (
         <div>
           <Card style={{ marginBottom: 12 }}>
-            <h3 style={{ margin: '0 0 14px', fontSize: '0.85rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            <h3 className="label" style={{ margin: '0 0 14px' }}>
               Sueño
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
               <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Horas dormidas</label>
+                <label className="label">Horas dormidas</label>
                 <input type="number" step="0.5" min="0" max="16" value={sueno.sueno_horas}
                   onChange={e => setSueno(p => ({ ...p, sueno_horas: e.target.value }))}
                   placeholder="7.5"
-                  style={{ width: '100%', padding: '8px 10px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: '0.9rem' }} />
+                  style={{ width: '100%', padding: '8px 10px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', color: 'var(--text)', fontSize: '0.9rem' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Acostarse</label>
+                <label className="label">Acostarse</label>
                 <input type="time" value={sueno.hora_acostarse}
                   onChange={e => setSueno(p => ({ ...p, hora_acostarse: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 10px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: '0.9rem' }} />
+                  style={{ width: '100%', padding: '8px 10px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', color: 'var(--text)', fontSize: '0.9rem' }} />
               </div>
             </div>
           </Card>
 
           <Card style={{ marginBottom: 12 }}>
-            <h3 style={{ margin: '0 0 14px', fontSize: '0.85rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            <h3 className="label" style={{ margin: '0 0 14px' }}>
               Medidas (opcional)
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
@@ -191,28 +191,28 @@ export default function Checkin() {
                 { key: 'brazo_cm', label: 'Brazo (cm)', placeholder: '36' },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
-                  <label style={{ fontSize: '0.73rem', color: 'var(--text-dim)' }}>{label}</label>
+                  <label className="label">{label}</label>
                   <input type="number" step="0.1" value={medidas[key]}
                     onChange={e => setMedidas(p => ({ ...p, [key]: e.target.value }))}
                     placeholder={placeholder}
-                    style={{ width: '100%', padding: '8px 8px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: '0.9rem' }} />
+                    style={{ width: '100%', padding: '8px 8px', marginTop: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', color: 'var(--text)', fontSize: '0.9rem' }} />
                 </div>
               ))}
             </div>
           </Card>
 
           <Card>
-            <h3 style={{ margin: '0 0 14px', fontSize: '0.85rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            <h3 className="label" style={{ margin: '0 0 14px' }}>
               Dolor / lesión activa
             </h3>
             <input type="text" value={dolor.zona}
               onChange={e => setDolor(p => ({ ...p, zona: e.target.value }))}
               placeholder="p.ej. hombro derecho, rodilla izquierda"
-              style={{ width: '100%', padding: '9px 12px', marginBottom: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', fontSize: '0.88rem', boxSizing: 'border-box' }} />
+              style={{ width: '100%', padding: '9px 12px', marginBottom: 10, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', color: 'var(--text)', fontSize: '0.88rem', boxSizing: 'border-box' }} />
             {dolor.zona.trim() && (
               <SliderField label={`Intensidad: ${dolor.zona}`} name="intensidad"
                 value={dolor.intensidad} onChange={(_, v) => setDolor(p => ({ ...p, intensidad: v }))}
-                min={0} max={10} emoji="🔴" />
+                min={0} max={10} />
             )}
           </Card>
         </div>
@@ -223,10 +223,13 @@ export default function Checkin() {
         disabled={saving}
         style={{
           width: '100%', marginTop: 20, padding: '14px 0',
-          background: saved ? '#22c55e' : 'var(--accent)',
-          color: '#fff', border: 'none', borderRadius: 10,
-          fontWeight: 700, fontSize: '1rem', cursor: saving ? 'not-allowed' : 'pointer',
-          opacity: saving ? 0.7 : 1, transition: 'all 0.2s',
+          background: saved ? 'transparent' : 'var(--accent)',
+          color: saved ? 'var(--data-good)' : 'var(--bg)',
+          border: saved ? '1px solid var(--data-good)' : 'none',
+          borderRadius: 'var(--r-lg)',
+          fontWeight: 600, fontSize: '0.95rem', cursor: saving ? 'not-allowed' : 'pointer',
+          fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em',
+          opacity: saving ? 0.7 : 1, transition: 'background var(--t-base), color var(--t-base), border-color var(--t-base)',
         }}
       >
         {saving ? 'Guardando…' : saved ? 'Guardado' : 'Registrar check-in'}
