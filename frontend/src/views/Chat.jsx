@@ -33,21 +33,22 @@ function Message({ msg }) {
       marginBottom: 16,
     }}>
       {!isUser && (
-        <div style={{
-          width: 30, height: 30, borderRadius: 6, flexShrink: 0,
-          background: 'var(--border)',
+        <div className="num" style={{
+          width: 28, height: 28, borderRadius: 'var(--r-sm)', flexShrink: 0,
+          background: 'var(--bg-card-raised)',
+          border: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-soft)',
+          fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)',
         }}>C</div>
       )}
       <div style={{
         maxWidth: '82%',
-        background: isUser ? 'var(--accent)' : 'var(--bg-card)',
-        border: isUser ? 'none' : '1px solid var(--border)',
-        borderRadius: isUser ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
+        background: isUser ? 'var(--bg-card-raised)' : 'var(--bg-card)',
+        border: '1px solid ' + (isUser ? 'var(--border-strong)' : 'var(--border)'),
+        borderRadius: isUser ? '6px 6px 2px 6px' : '6px 6px 6px 2px',
         padding: '10px 14px',
         fontSize: '0.89rem',
-        color: isUser ? '#fff' : 'var(--text-muted)',
+        color: 'var(--text-muted)',
         lineHeight: 1.55,
       }}>
         {msg.typing ? <TypingDots /> : (
@@ -127,18 +128,18 @@ export default function Chat() {
         flexShrink: 0,
       }}>
         <div style={{
-          width: 32, height: 32, borderRadius: 8,
-          background: 'var(--accent)',
+          width: 32, height: 32, borderRadius: 'var(--r-sm)',
+          border: '1px solid var(--border-strong)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2L8 7H4l3 5-3 5h4l4 5 4-5h4l-3-5 3-5h-4z"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
         </div>
         <div>
           <div style={{ fontWeight: 600, fontSize: '0.93rem' }}>Coach IA</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
+          <div className="label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--data-good)', display: 'inline-block' }} />
             En línea
           </div>
         </div>
@@ -161,7 +162,7 @@ export default function Chat() {
             color: 'var(--text-dim)',
             fontSize: '0.9rem',
           }}>
-            <div style={{ fontSize: '2rem', marginBottom: 12 }}>💪</div>
+            <div className="label" style={{ marginBottom: 10 }}>Sin mensajes</div>
             <div>Cuéntale al coach cómo ha ido el entreno,</div>
             <div>lo que has comido, o haz cualquier pregunta.</div>
           </div>
@@ -197,7 +198,7 @@ export default function Chat() {
             flex: 1,
             resize: 'none',
             padding: '10px 14px',
-            borderRadius: 12,
+            borderRadius: 'var(--r-lg)',
             fontSize: 16,
             lineHeight: 1.4,
             maxHeight: 130,
@@ -213,16 +214,16 @@ export default function Chat() {
           disabled={loading || !input.trim()}
           style={{
             width: 46, height: 46,
-            borderRadius: 12,
+            borderRadius: 'var(--r-lg)',
             background: loading || !input.trim() ? 'var(--border)' : 'var(--accent)',
             border: 'none',
             cursor: loading || !input.trim() ? 'default' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
-            transition: 'background 0.15s',
+            transition: 'background var(--t-base)',
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
