@@ -15,7 +15,7 @@ _REGLAS_FIJAS = """Reglas:
 - Si el usuario te pide explícitamente que decidas tú ("tú decides", "tú eres el experto", "haz lo que veas mejor"), da UNA única recomendación concreta y directa. No enumeres "Opción A / Opción B" ni listes ventajas y desventajas de cada una — eso es justo lo que el usuario te ha pedido que evites. Puedes mencionar en una frase breve por qué eliges esa opción, pero la respuesta debe cerrar con una decisión clara, no con la pelota de vuelta en su tejado.
 - No valides por defecto cada idea del usuario. Si algo que propone es razonable pero hay una opción mejor, dilo directamente y explica por qué — el usuario prefiere ese debate a que le des siempre la razón. Reserva el acuerdo simple para cuando de verdad no haya nada que mejorar.
 - No uses emojis excesivos ni frases motivacionales vacías.
-- Si el contexto incluye "Entrenamiento que acaba de registrar" o "Comida que acaba de registrar", confirma explícitamente al inicio que ha quedado guardado antes de dar feedback."""
+- Si el contexto incluye "Entrenamiento que acaba de registrar", "Comida que acaba de registrar" o "Cambios aplicados a la rutina", confirma explícitamente al inicio que ha quedado guardado antes de dar feedback."""
 
 
 def _extraer_campo(texto: str, *patrones: str) -> str:
@@ -179,6 +179,7 @@ def construir_prompt(
     recuperacion: Optional[dict] = None,
     plan_nutricional: Optional[dict] = None,
     rutina_plan: Optional[dict] = None,
+    rutina_editada: Optional[dict] = None,
 ) -> list[dict]:
     """
     Ensambla los mensajes para la llamada al LLM.
@@ -279,14 +280,30 @@ def construir_prompt(
         if texto_rutina_plan:
             bloques.append(
                 "## Rutina semanal guardada por el usuario (fuente de verdad)\n"
-                "Esta es la rutina EXACTA que el usuario tiene guardada ahora mismo. "
-                "Si te pregunta qué rutina tiene o le pides que la recuerdes, usa SOLO esto — "
-                "no inventes ni reconstruyas de memoria.\n"
-                "IMPORTANTE — no puedes guardar cambios: no tienes forma de escribir en la base de "
-                "datos del usuario. Si pide editar/cambiar un ejercicio o día, NUNCA digas que ya lo "
-                "has actualizado o guardado (sería falso). En su lugar: propón el cambio concreto "
-                "(qué ejercicio, qué día, series/reps) y dile que lo aplique en la vista Rutina de la "
-                "app, donde puede editar cada día directamente.\n" + texto_rutina_plan
+                "Esta es la rutina EXACTA que el usuario tiene guardada ahora mismo (ya incluye "
+                "cualquier cambio aplicado en este mismo turno). Si te pregunta qué rutina tiene o "
+                "le pides que la recuerdes, usa SOLO esto — no inventes ni reconstruyas de memoria.\n"
+                "Sobre ediciones: el sistema SÍ puede guardar cambios de rutina automáticamente "
+                "cuando el usuario pide explícitamente cambiar/añadir/quitar un ejercicio o vaciar "
+                "un día. Si ves más abajo un bloque 'Cambios aplicados a la rutina', esos cambios YA "
+                "están guardados — confírmalo sin rodeos, sin decir que lo va a tener que hacer él. "
+                "Si el usuario pide un cambio y NO aparece ese bloque, el sistema no ha podido "
+                "aplicarlo (mensaje ambiguo, día/ejercicio no identificado, etc.) — en ese caso NO "
+                "digas que ya está guardado; pídele que lo reformule indicando el día y el ejercicio "
+                "exacto, o que lo edite directamente en la vista Rutina de la app.\n"
+                + texto_rutina_plan
+            )
+
+    # --- Cambios de rutina aplicados en este turno (editar_rutina) ---
+    if rutina_editada:
+        texto_edicion = _formatear_rutina_editada(rutina_editada)
+        if texto_edicion:
+            bloques.append(
+                "## Cambios aplicados a la rutina (fuente de verdad — ya guardados)\n"
+                "Estos cambios se acaban de guardar en la base de datos del usuario. Confirma "
+                "explícitamente al inicio de tu respuesta qué se ha cambiado — usa estos datos tal "
+                "cual, no los reformules de memoria — y luego da tu opinión o feedback si procede.\n"
+                + texto_edicion
             )
 
     # --- Plan nutricional con timing (Fase 5) ---
@@ -452,6 +469,38 @@ def _formatear_rutina_plan(rutina_plan: dict) -> str:
             if grupo:
                 linea += f" ({grupo})"
             partes.append(linea)
+    return "\n".join(partes)
+
+
+def _formatear_rutina_editada(datos: dict) -> str:
+    """Formatea los cambios de rutina recién guardados (editar_rutina) para el prompt."""
+    partes = []
+    for cambio in datos.get("cambios") or []:
+        dia = _DIAS_LABEL.get(cambio.get("dia_semana"), cambio.get("dia_semana", ""))
+        accion = cambio.get("accion")
+        objetivo = cambio.get("ejercicio_objetivo")
+        nuevo = cambio.get("ejercicio_nuevo") or {}
+        nombre_nuevo = nuevo.get("ejercicio")
+
+        if accion == "reemplazar" and objetivo and nombre_nuevo:
+            linea = f"{dia}: {objetivo} → {nombre_nuevo}"
+        elif accion == "agregar" and nombre_nuevo:
+            linea = f"{dia}: añadido {nombre_nuevo}"
+        elif accion == "eliminar" and objetivo:
+            linea = f"{dia}: eliminado {objetivo}"
+        elif accion == "vaciar_dia":
+            linea = f"{dia}: día vaciado (sin ejercicios)"
+        else:
+            continue
+
+        if nombre_nuevo:
+            series = nuevo.get("series_objetivo")
+            reps = nuevo.get("reps_objetivo")
+            if series and reps:
+                linea += f" ({series}x{reps})"
+            elif reps:
+                linea += f" ({reps})"
+        partes.append(f"- {linea}")
     return "\n".join(partes)
 
 

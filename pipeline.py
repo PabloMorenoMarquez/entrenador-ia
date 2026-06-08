@@ -35,7 +35,39 @@ from memory.conectar_sheets import (
 from engine.analizar_entrenamiento import analizar_entrenamiento
 from engine.parsear_entreno import parsear_entreno
 from engine.parsear_comida import parsear_comida
+from engine.parsear_edicion_rutina import parsear_edicion_rutina
 from rag.buscar_contexto import buscar_contexto
+
+
+def _aplicar_edicion_rutina(ejercicios_actuales: list[dict], edicion: dict) -> list[dict]:
+    """Aplica una edición (reemplazar/agregar/eliminar/vaciar_dia) sobre la lista de ejercicios de un día."""
+    accion = edicion.get("accion")
+    objetivo = (edicion.get("ejercicio_objetivo") or "").strip().lower()
+    nuevo = edicion.get("ejercicio_nuevo")
+
+    if accion == "vaciar_dia":
+        return []
+
+    if accion == "eliminar":
+        return [ej for ej in ejercicios_actuales if ej.get("ejercicio", "").strip().lower() != objetivo]
+
+    if accion == "agregar" and nuevo:
+        return [*ejercicios_actuales, nuevo]
+
+    if accion == "reemplazar" and nuevo:
+        nueva_lista = []
+        reemplazado = False
+        for ej in ejercicios_actuales:
+            if not reemplazado and ej.get("ejercicio", "").strip().lower() == objetivo:
+                nueva_lista.append(nuevo)
+                reemplazado = True
+            else:
+                nueva_lista.append(ej)
+        if not reemplazado:
+            nueva_lista.append(nuevo)
+        return nueva_lista
+
+    return ejercicios_actuales
 
 
 async def _buscar_memoria_semantica(mensaje: str) -> str | None:
@@ -138,6 +170,7 @@ async def procesar_mensaje(mensaje: str) -> str:
     es_registro_entreno = intencion.get("tipo") == "registro_entreno"
     es_registro_comida  = intencion.get("tipo") == "registro_comida"
     es_recalcular_macros = intencion.get("tipo") == "recalcular_macros"
+    es_editar_rutina = intencion.get("tipo") == "editar_rutina"
 
     tasks_lectura = [
         leer_sheets(intencion["sheets_necesarias"]),  # idx 0
@@ -148,9 +181,11 @@ async def procesar_mensaje(mensaje: str) -> str:
         _leer_rutina_plan_ctx(),                      # idx 5: plan de rutina semanal (ground truth)
     ]
     if es_registro_entreno:
-        tasks_lectura.append(parsear_entreno(mensaje))   # idx 6
+        tasks_lectura.append(parsear_entreno(mensaje))           # idx 6
     elif es_registro_comida:
-        tasks_lectura.append(parsear_comida(mensaje))    # idx 6
+        tasks_lectura.append(parsear_comida(mensaje))            # idx 6
+    elif es_editar_rutina:
+        tasks_lectura.append(parsear_edicion_rutina(mensaje))    # idx 6
 
     resultados_lectura = await asyncio.gather(*tasks_lectura, return_exceptions=True)
     contexto_usuario = resultados_lectura[0] if not isinstance(resultados_lectura[0], Exception) else {}
@@ -165,13 +200,14 @@ async def procesar_mensaje(mensaje: str) -> str:
     plan_nutricional = resultados_lectura[4] if not isinstance(resultados_lectura[4], Exception) else None
     rutina_plan = resultados_lectura[5] if not isinstance(resultados_lectura[5], Exception) else None
 
-    datos_parse_raw = resultados_lectura[6] if (es_registro_entreno or es_registro_comida) else None
+    datos_parse_raw = resultados_lectura[6] if (es_registro_entreno or es_registro_comida or es_editar_rutina) else None
     if isinstance(datos_parse_raw, Exception):
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
 
-    datos_entreno_raw = datos_parse_raw if es_registro_entreno else None
-    datos_comida_raw  = datos_parse_raw if es_registro_comida  else None
+    datos_entreno_raw  = datos_parse_raw if es_registro_entreno else None
+    datos_comida_raw   = datos_parse_raw if es_registro_comida  else None
+    datos_edicion_raw  = datos_parse_raw if es_editar_rutina    else None
 
     # 2.5 Guardar registro si fue parseado correctamente
     entreno_registrado = None
@@ -192,6 +228,34 @@ async def procesar_mensaje(mensaje: str) -> str:
             print(f"[pipeline] Comida guardada: {filas} alimento(s)")
         except Exception as e:
             print(f"[pipeline] Error guardando comida: {e}")
+
+    rutina_editada = None
+    if datos_edicion_raw and rutina_plan:
+        try:
+            from memory.lectura_estructurada import guardar_rutina_plan_dia, DIAS_SEMANA
+            dias_actuales = rutina_plan.get("dias") or {}
+            cambios_aplicados = []
+            for edicion in datos_edicion_raw.get("ediciones", []):
+                dia = edicion.get("dia_semana")
+                if dia not in DIAS_SEMANA:
+                    continue
+                actuales = dias_actuales.get(dia, [])
+                nueva_lista = _aplicar_edicion_rutina(actuales, edicion)
+                await guardar_rutina_plan_dia(dia, nueva_lista)
+                dias_actuales[dia] = nueva_lista
+                cambios_aplicados.append({
+                    "dia_semana": dia,
+                    "accion": edicion.get("accion"),
+                    "ejercicio_objetivo": edicion.get("ejercicio_objetivo"),
+                    "ejercicio_nuevo": edicion.get("ejercicio_nuevo"),
+                    "resultado_dia": nueva_lista,
+                })
+            if cambios_aplicados:
+                rutina_editada = {"cambios": cambios_aplicados}
+                rutina_plan = {"dias": dias_actuales}
+                print(f"[pipeline] Rutina editada: {len(cambios_aplicados)} cambio(s) guardado(s)")
+        except Exception as e:
+            print(f"[pipeline] Error editando rutina: {e}")
 
     # 2.6 Recalcular macros si fue solicitado
     macros_recalculados = None
@@ -242,6 +306,7 @@ async def procesar_mensaje(mensaje: str) -> str:
         recuperacion=recuperacion,
         plan_nutricional=plan_nutricional,
         rutina_plan=rutina_plan,
+        rutina_editada=rutina_editada,
     )
 
     # 5. Llamar al LLM principal con fallback automático

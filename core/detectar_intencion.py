@@ -22,7 +22,7 @@ PROMPT_SISTEMA = """Clasifica el mensaje del usuario y responde SOLO con un JSON
 
 Formato exacto:
 {
-  "tipo": "entrenamiento|nutricion|registro_entreno|registro_comida|recalcular_macros|general",
+  "tipo": "entrenamiento|nutricion|registro_entreno|registro_comida|recalcular_macros|editar_rutina|general",
   "sheets_necesarias": ["array con nombres de sheets"],
   "necesita_motor": true o false,
   "necesita_rag": true o false
@@ -36,6 +36,7 @@ Reglas de clasificación:
 - registro_entreno: el usuario registra lo que ha entrenado → motor: true, rag: false, sheets: [perfil_usuario, plan_semanal, memory]
 - registro_comida: el usuario registra lo que ha comido → motor: false, rag: false, sheets: [perfil_usuario, objetivos, alimentos_disponibles]
 - recalcular_macros: el usuario pide recalcular sus macros objetivo, ajustar calorías, cambiar objetivos nutricionales → motor: false, rag: false, sheets: [perfil_usuario, objetivos, memory]
+- editar_rutina: el usuario pide explícitamente CAMBIAR/AÑADIR/QUITAR un ejercicio o vaciar un día de su plan semanal guardado (ej: "cambia las sentadillas del lunes por prensa", "añade curl de bíceps al jueves", "quita el cardio del martes") → motor: false, rag: false, sheets: [perfil_usuario, plan_semanal, memory]
 - general: saludos, preguntas generales, conversación → motor: false, rag: false, sheets: [perfil_usuario, memory]
 
 Incluye siempre perfil_usuario y memory en sheets_necesarias."""
