@@ -590,22 +590,27 @@ def guardar_entreno_sb(datos: dict, sesion_id: str) -> None:
     }, on_conflict="user_id,sesion_id").execute()
     ejercicios = datos.get("ejercicios") or []
     if ejercicios:
-        rows = [{
-            "user_id": uid,
-            "sesion_id": sesion_id,
-            "fecha": ahora.strftime("%Y-%m-%d"),
-            "orden": i + 1,
-            "ejercicio": ej.get("ejercicio") or "",
-            "grupo_muscular": ej.get("grupo_muscular") or None,
-            "series": ej.get("series") or None,
-            "reps_objetivo": str(ej.get("reps_objetivo") or ""),
-            "reps_realizadas": str(ej.get("reps_realizadas") or ""),
-            "peso_kg": ej.get("peso_kg") or None,
-            "tipo_peso": ej.get("tipo_peso") or None,
-            "descanso_seg": ej.get("descanso_seg") or None,
-            "rir": ej.get("rir") or None,
-            "notas": ej.get("notas") or None,
-        } for i, ej in enumerate(ejercicios)]
+        rows = []
+        for i, ej in enumerate(ejercicios):
+            row = {
+                "user_id": uid,
+                "sesion_id": sesion_id,
+                "fecha": ahora.strftime("%Y-%m-%d"),
+                "orden": i + 1,
+                "ejercicio": ej.get("ejercicio") or "",
+                "grupo_muscular": ej.get("grupo_muscular") or None,
+                "series": ej.get("series") or None,
+                "reps_objetivo": str(ej.get("reps_objetivo") or ""),
+                "reps_realizadas": str(ej.get("reps_realizadas") or ""),
+                "peso_kg": ej.get("peso_kg") or None,
+                "tipo_peso": ej.get("tipo_peso") or None,
+                "descanso_seg": ej.get("descanso_seg") or None,
+                "rir": ej.get("rir") or None,
+                "notas": ej.get("notas") or None,
+            }
+            if ej.get("series_detalle"):
+                row["series_detalle"] = ej["series_detalle"]
+            rows.append(row)
         sb.table("ejercicios_detalle").insert(rows).execute()
 
 
@@ -702,7 +707,7 @@ def leer_ultimas_ejecuciones_sb(nombres: list) -> dict:
     uid = get_user_id()
     r = (
         sb.table("ejercicios_detalle")
-        .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir")
+        .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir, series_detalle")
         .eq("user_id", uid)
         .order("fecha", desc=True)
         .limit(400)
@@ -719,6 +724,7 @@ def leer_ultimas_ejecuciones_sb(nombres: list) -> dict:
                 "reps_realizadas": fila.get("reps_realizadas") or "",
                 "peso_kg": fila.get("peso_kg") or 0,
                 "rir": fila.get("rir"),
+                "series_detalle": fila.get("series_detalle"),
             }
     return resultado
 

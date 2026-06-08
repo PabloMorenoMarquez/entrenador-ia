@@ -23,6 +23,9 @@ Formato exacto:
       "tipo_peso": "barra|mancuernas|maquina|cable|peso_corporal|otro",
       "descanso_seg": número o null,
       "rir": número o null,
+      "series_detalle": [
+        {"numero": 1, "reps": número o null, "peso_kg": número o null, "rir": número o null, "nota": ""}
+      ] o null,
       "notas": ""
     }
   ],
@@ -40,7 +43,12 @@ Reglas:
 - RIR = reps que sobraron ("me sobraron 2" = rir 2, "al fallo" = rir 0)
 - tipo_peso: infiere por contexto (press banca → barra, curl con mancuernas → mancuernas)
 - Si no se menciona algo, usa null
-- Todos los ejercicios mencionados van en el array"""
+- Todos los ejercicios mencionados van en el array
+- series_detalle: SOLO rellénalo si el usuario describe cada serie por separado con datos distintos
+  entre ellas (ej. "primera serie 10 reps a 80, segunda 8 a 80, tercera al fallo 6 a 70" o un dropset).
+  Cada entrada es una serie real reportada, en orden. Si solo da un número de series y un peso/reps
+  generales para todo el ejercicio (sin diferenciar serie a serie), deja series_detalle en null —
+  no inventes un desglose que el usuario no ha dado."""
 
 
 def _extraer_json(texto: str) -> dict:

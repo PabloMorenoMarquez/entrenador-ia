@@ -247,7 +247,13 @@ def construir_prompt(
     if entreno_registrado:
         texto = _formatear_entreno_registrado(entreno_registrado)
         if texto:
-            bloques.append(f"## Entrenamiento que acaba de registrar el usuario\n{texto}")
+            nota_series = (
+                "Si aparecen líneas '· Serie N: ...' son el desglose serie a serie tal y como lo "
+                "reportó el usuario (ej. dropsets) — ya está guardado así. Cítalas tal cual si "
+                "comentas su progresión, no las resumas en un único peso/rep promedio.\n"
+                if "· Serie" in texto else ""
+            )
+            bloques.append(f"## Entrenamiento que acaba de registrar el usuario\n{nota_series}{texto}")
 
     # --- Comida recién registrada (registro_comida) ---
     if comida_registrada:
@@ -402,6 +408,22 @@ def _formatear_entreno_registrado(datos: dict) -> str:
             linea += f" RIR{rir}"
         if linea:
             partes.append(f"- {linea}")
+        for s in (ej.get("series_detalle") or []):
+            num = s.get("numero")
+            s_reps = s.get("reps")
+            s_peso = s.get("peso_kg")
+            s_rir = s.get("rir")
+            s_nota = s.get("nota")
+            sub = f"  · Serie {num}:" if num is not None else "  · Serie:"
+            if s_reps is not None:
+                sub += f" {s_reps} reps"
+            if s_peso is not None:
+                sub += f" @ {s_peso}kg"
+            if s_rir is not None:
+                sub += f" RIR{s_rir}"
+            if s_nota:
+                sub += f" ({s_nota})"
+            partes.append(sub)
     return "\n".join(partes)
 
 
