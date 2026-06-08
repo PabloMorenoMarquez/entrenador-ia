@@ -84,7 +84,7 @@ async def parsear_entreno(mensaje: str) -> dict | None:
                 {"role": "user", "content": mensaje},
             ],
             modelos=MODELOS_INTENCION,
-            max_tokens=600,
+            max_tokens=2500,
             response_format={"type": "json_object"},
         )
         return _extraer_json(respuesta)
