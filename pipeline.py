@@ -205,6 +205,9 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
 
+    if es_registro_entreno and not datos_parse_raw:
+        print(f"[pipeline] registro_entreno detectado pero el parser no devolvió datos (mensaje de {len(mensaje)} chars)")
+
     datos_entreno_raw  = datos_parse_raw if es_registro_entreno else None
     datos_comida_raw   = datos_parse_raw if es_registro_comida  else None
     datos_edicion_raw  = datos_parse_raw if es_editar_rutina    else None
@@ -301,6 +304,7 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
         motor_output=motor_output,
         rag_context=rag_context,
         entreno_registrado=entreno_registrado,
+        intento_registro_entreno=es_registro_entreno,
         comida_registrada=comida_registrada,
         macros_recalculados=macros_recalculados,
         recuperacion=recuperacion,

@@ -174,6 +174,7 @@ def construir_prompt(
     motor_output: Optional[dict] = None,
     rag_context: Optional[str] = None,
     entreno_registrado: Optional[dict] = None,
+    intento_registro_entreno: bool = False,
     comida_registrada: Optional[dict] = None,
     macros_recalculados: Optional[dict] = None,
     recuperacion: Optional[dict] = None,
@@ -254,6 +255,16 @@ def construir_prompt(
                 if "· Serie" in texto else ""
             )
             bloques.append(f"## Entrenamiento que acaba de registrar el usuario\n{nota_series}{texto}")
+    elif intento_registro_entreno:
+        bloques.append(
+            "## Aviso: registro de entrenamiento NO guardado\n"
+            "El usuario acaba de describir un entrenamiento, pero el sistema NO ha podido "
+            "extraerlo/guardarlo en su historial (mensaje demasiado largo o ambiguo, fallo del "
+            "parser, etc.). NO digas que ha quedado registrado ni hagas un análisis como si lo "
+            "tuvieras guardado — eso sería falso. Dile honestamente que no se ha guardado y "
+            "pídele que lo reenvíe de forma más simple (ejercicio por ejercicio, con series/reps/peso "
+            "claros), o resume tú lo que entendiste y pregúntale si lo confirmas para reintentarlo.\n"
+        )
 
     # --- Comida recién registrada (registro_comida) ---
     if comida_registrada:
