@@ -33,6 +33,10 @@ Formato exacto:
 Reglas:
 - Estima macros con conocimiento nutricional estándar (por 100g si no se especifica cantidad)
 - Si no se menciona cantidad usa porción típica en gramos
+- CANTIDADES EN UNIDADES CONTABLES (ej. "8 filetes", "3 huevos", "2 lonchas", "5 galletas"):
+  multiplica el peso típico de UNA unidad por el número de unidades para obtener
+  cantidad_g_ml y los macros TOTALES. "8 filetes de solomillo" NO es una porción de 240g,
+  son 8 × ~150-200g. Indica el cálculo en "notas" (ej. "8 filetes x ~180g = 1440g").
 - tipo_comida: infiere por contexto o hora mencionada
 - Cada alimento separado en el array
 - Si no puedes estimar algo usa null
