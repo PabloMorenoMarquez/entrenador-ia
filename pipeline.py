@@ -155,10 +155,10 @@ async def _leer_recuperacion_hoy() -> dict | None:
         return None
 
 
-async def procesar_mensaje(mensaje: str) -> str:
+async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
     """
     Punto de entrada principal del pipeline.
-    Recibe el mensaje del usuario y devuelve la respuesta del coach.
+    Recibe el mensaje del usuario y el chat_id de la sesión activa, devuelve la respuesta del coach.
     """
 
     # 1. Detectar intención
@@ -173,8 +173,8 @@ async def procesar_mensaje(mensaje: str) -> str:
     es_editar_rutina = intencion.get("tipo") == "editar_rutina"
 
     tasks_lectura = [
-        leer_sheets(intencion["sheets_necesarias"]),  # idx 0
-        leer_conversaciones(limite=10),               # idx 1
+        leer_sheets(intencion["sheets_necesarias"]),       # idx 0
+        leer_conversaciones(limite=10, chat_id=chat_id),   # idx 1
         _leer_recuperacion_hoy(),                     # idx 2: checkin + biometricos + dolores
         _buscar_memoria_semantica(mensaje),           # idx 3: memoria relevante (Supabase)
         _leer_plan_nutricional(),                     # idx 4: timing nutricional de hoy
@@ -320,6 +320,7 @@ async def procesar_mensaje(mensaje: str) -> str:
     await guardar_conversacion(
         mensaje_usuario=mensaje,
         respuesta_coach=respuesta,
+        chat_id=chat_id,
     )
 
     # 7. Evaluar si guardar algo en memoria (no bloquea la respuesta)

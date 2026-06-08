@@ -173,13 +173,14 @@ def _leer_sheets_sync(nombres: list[str]) -> dict:
     return resultado
 
 
-def _leer_conversaciones_sync(limite: int) -> list[dict]:
+def _leer_conversaciones_sync(limite: int, chat_id: str | None = None) -> list[dict]:
     """
-    Lee las últimas N conversaciones. Supabase primario, Sheets fallback.
+    Lee las últimas N conversaciones (de un chat_id concreto si se indica).
+    Supabase primario, Sheets fallback (el fallback no soporta chat_id — ignora la sesión).
     """
     try:
         from db.repositorio import leer_conversaciones_sb
-        rows = leer_conversaciones_sb(limite)
+        rows = leer_conversaciones_sb(limite, chat_id=chat_id)
         if rows:
             return rows
     except Exception as e:
@@ -196,14 +197,24 @@ def _leer_conversaciones_sync(limite: int) -> list[dict]:
     ]
 
 
+def _listar_conversaciones_sync() -> list[dict]:
+    """Lista las conversaciones (sesiones de chat) del usuario, agrupadas por chat_id."""
+    try:
+        from db.repositorio import listar_conversaciones_sb
+        return listar_conversaciones_sb()
+    except Exception as e:
+        print(f"[sheets] No se pudo listar conversaciones: {e}")
+        return []
+
+
 # ---- Escritura ----
 
-def _guardar_conversacion_sync(mensaje_usuario: str, respuesta_coach: str) -> None:
+def _guardar_conversacion_sync(mensaje_usuario: str, respuesta_coach: str, chat_id: str) -> None:
     """Guarda el turno actual. Supabase primario, Sheets secundario (dual-write)."""
     try:
         from db.repositorio import guardar_conversacion_sb
-        guardar_conversacion_sb("user", mensaje_usuario)
-        guardar_conversacion_sb("assistant", respuesta_coach)
+        guardar_conversacion_sb("user", mensaje_usuario, chat_id)
+        guardar_conversacion_sb("assistant", respuesta_coach, chat_id)
     except Exception as e:
         print(f"[sheets] Error guardando conversación en Supabase: {e}")
 
@@ -244,14 +255,19 @@ async def leer_sheets(nombres: list[str]) -> dict:
     return await asyncio.to_thread(_leer_sheets_sync, nombres)
 
 
-async def leer_conversaciones(limite: int = 10) -> list[dict]:
-    """Devuelve los últimos N turnos de conversación."""
-    return await asyncio.to_thread(_leer_conversaciones_sync, limite)
+async def leer_conversaciones(limite: int = 10, chat_id: str | None = None) -> list[dict]:
+    """Devuelve los últimos N turnos de conversación (de un chat_id concreto si se indica)."""
+    return await asyncio.to_thread(_leer_conversaciones_sync, limite, chat_id)
 
 
-async def guardar_conversacion(mensaje_usuario: str, respuesta_coach: str) -> None:
-    """Guarda el turno actual en la sheet de conversaciones."""
-    await asyncio.to_thread(_guardar_conversacion_sync, mensaje_usuario, respuesta_coach)
+async def listar_conversaciones() -> list[dict]:
+    """Devuelve la lista de conversaciones (sesiones de chat) del usuario, más recientes primero."""
+    return await asyncio.to_thread(_listar_conversaciones_sync)
+
+
+async def guardar_conversacion(mensaje_usuario: str, respuesta_coach: str, chat_id: str) -> None:
+    """Guarda el turno actual en la sheet de conversaciones, asociado a una sesión de chat."""
+    await asyncio.to_thread(_guardar_conversacion_sync, mensaje_usuario, respuesta_coach, chat_id)
 
 
 async def guardar_memoria(entrada: dict) -> None:

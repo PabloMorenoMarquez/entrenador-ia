@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional
 import os
 import asyncio
+import uuid
 
 from pipeline import procesar_mensaje
 
@@ -24,10 +25,12 @@ if os.path.isdir(_static_dir):
 
 class ChatRequest(BaseModel):
     mensaje: str
+    chat_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     respuesta: str
+    chat_id: str
 
 
 class PerfilUpdateRequest(BaseModel):
@@ -111,9 +114,10 @@ async def chat(request: ChatRequest):
     if not request.mensaje or not request.mensaje.strip():
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío.")
 
+    chat_id = request.chat_id or str(uuid.uuid4())
     try:
-        respuesta = await procesar_mensaje(request.mensaje.strip())
-        return ChatResponse(respuesta=respuesta)
+        respuesta = await procesar_mensaje(request.mensaje.strip(), chat_id=chat_id)
+        return ChatResponse(respuesta=respuesta, chat_id=chat_id)
 
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=f"Servicio temporalmente no disponible: {str(e)}")
@@ -122,10 +126,19 @@ async def chat(request: ChatRequest):
 
 
 @app.get("/api/chat/historial")
-async def get_chat_historial(limite: int = 30):
+async def get_chat_historial(limite: int = 30, chat_id: Optional[str] = None):
     try:
         from memory.conectar_sheets import leer_conversaciones
-        return await leer_conversaciones(limite=limite)
+        return await leer_conversaciones(limite=limite, chat_id=chat_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/chat/conversaciones")
+async def get_chat_conversaciones():
+    try:
+        from memory.conectar_sheets import listar_conversaciones
+        return await listar_conversaciones()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

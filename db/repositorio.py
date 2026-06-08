@@ -426,29 +426,69 @@ def leer_cronotipo() -> Optional[str]:
 # CONVERSACIONES (Fase 7)
 # ─────────────────────────────────────────
 
-def guardar_conversacion_sb(rol: str, contenido: str) -> None:
+def guardar_conversacion_sb(rol: str, contenido: str, chat_id: str) -> None:
     sb = get_client()
     uid = get_user_id()
     sb.table("conversaciones").insert({
         "user_id": uid,
         "rol": rol,
         "contenido": contenido,
+        "chat_id": chat_id,
     }).execute()
 
 
-def leer_conversaciones_sb(limite: int = 10) -> list[dict]:
+def leer_conversaciones_sb(limite: int = 10, chat_id: Optional[str] = None) -> list[dict]:
     sb = get_client()
     uid = get_user_id()
-    result = (
+    query = (
         sb.table("conversaciones")
         .select("rol, contenido, timestamp")
         .eq("user_id", uid)
-        .order("timestamp", desc=True)
-        .limit(limite)
-        .execute()
     )
+    if chat_id:
+        query = query.eq("chat_id", chat_id)
+    result = query.order("timestamp", desc=True).limit(limite).execute()
     rows = list(reversed(result.data or []))
     return [{"rol": r["rol"], "contenido": r["contenido"]} for r in rows]
+
+
+def listar_conversaciones_sb(limite_filas: int = 500) -> list[dict]:
+    """
+    Agrupa las conversaciones del usuario por chat_id (sesión) para mostrarlas como
+    una lista. Trae las últimas N filas y agrupa en Python — la API REST de Supabase
+    no permite GROUP BY directamente.
+    """
+    sb = get_client()
+    uid = get_user_id()
+    r = (
+        sb.table("conversaciones")
+        .select("chat_id, rol, contenido, timestamp")
+        .eq("user_id", uid)
+        .order("timestamp", desc=True)
+        .limit(limite_filas)
+        .execute()
+    )
+    agrupado: dict = {}
+    for fila in (r.data or []):
+        cid = fila.get("chat_id")
+        if not cid:
+            continue
+        if cid not in agrupado:
+            agrupado[cid] = {
+                "chat_id": cid,
+                "ultima_fecha": fila.get("timestamp"),
+                "preview": None,
+                "num_mensajes": 0,
+            }
+        grupo = agrupado[cid]
+        grupo["num_mensajes"] += 1
+        # Las filas llegan de más reciente a más antigua: cada mensaje "user" que
+        # encontramos sobreescribe el preview, así que al terminar queda el PRIMER
+        # mensaje del usuario en esa conversación (el más antiguo) — sirve de título.
+        if fila.get("rol") == "user":
+            contenido = (fila.get("contenido") or "").strip()
+            grupo["preview"] = contenido[:80] + ("…" if len(contenido) > 80 else "")
+    return sorted(agrupado.values(), key=lambda c: c["ultima_fecha"] or "", reverse=True)
 
 
 # ─────────────────────────────────────────
