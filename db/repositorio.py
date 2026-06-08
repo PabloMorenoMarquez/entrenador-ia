@@ -651,7 +651,15 @@ def guardar_entreno_sb(datos: dict, sesion_id: str) -> None:
             if ej.get("series_detalle"):
                 row["series_detalle"] = ej["series_detalle"]
             rows.append(row)
-        sb.table("ejercicios_detalle").insert(rows).execute()
+        try:
+            sb.table("ejercicios_detalle").insert(rows).execute()
+        except Exception as e:
+            if "series_detalle" in str(e):
+                for row in rows:
+                    row.pop("series_detalle", None)
+                sb.table("ejercicios_detalle").insert(rows).execute()
+            else:
+                raise
 
 
 def leer_rutina_sb() -> Optional[dict]:
@@ -745,14 +753,26 @@ def leer_ultimas_ejecuciones_sb(nombres: list) -> dict:
         return {}
     sb = get_client()
     uid = get_user_id()
-    r = (
-        sb.table("ejercicios_detalle")
-        .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir, series_detalle")
-        .eq("user_id", uid)
-        .order("fecha", desc=True)
-        .limit(400)
-        .execute()
-    )
+    try:
+        r = (
+            sb.table("ejercicios_detalle")
+            .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir, series_detalle")
+            .eq("user_id", uid)
+            .order("fecha", desc=True)
+            .limit(400)
+            .execute()
+        )
+    except Exception as e:
+        if "series_detalle" not in str(e):
+            raise
+        r = (
+            sb.table("ejercicios_detalle")
+            .select("ejercicio, fecha, series, reps_realizadas, peso_kg, rir")
+            .eq("user_id", uid)
+            .order("fecha", desc=True)
+            .limit(400)
+            .execute()
+        )
     objetivo_lower = {n.strip().lower() for n in nombres}
     resultado: dict = {}
     for fila in (r.data or []):
