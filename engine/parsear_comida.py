@@ -34,11 +34,18 @@ Reglas:
 - Estima macros con conocimiento nutricional estándar (por 100g si no se especifica cantidad)
 - Si no se menciona cantidad usa porción típica en gramos
 - CANTIDADES EN UNIDADES CONTABLES (ej. "8 filetes", "3 huevos", "2 lonchas", "5 galletas"):
-  multiplica el peso típico de UNA unidad por el número de unidades para obtener
-  cantidad_g_ml y los macros TOTALES. "8 filetes de solomillo" NO es una porción de 240g,
-  son 8 × ~150-200g. Indica el cálculo en "notas" (ej. "8 filetes x ~180g = 1440g").
+  van en UNA SOLA entrada del array (mismo alimento = una entrada, NUNCA una entrada
+  por pieza/unidad). cantidad_g_ml y los macros de esa entrada son el TOTAL acumulado
+  = peso de UNA unidad x número de unidades. "8 filetes de solomillo" es UNA entrada
+  con cantidad_g_ml = suma de los 8, no 8 entradas con el total cada una (eso duplica
+  el registro x8 al guardarse).
+- PESO POR UNIDAD: si el usuario describe el tamaño ("como la palma de la mano",
+  "pequeño", "grande", "del tamaño de un puño", o dimensiones en cm), usa ESA
+  descripción para estimar el peso unitario, no un valor genérico de receta. Indica
+  el cálculo en "notas" (ej. "8 filetes pequeños ~9x4cm x ~40g = 320g total").
 - tipo_comida: infiere por contexto o hora mencionada
-- Cada alimento separado en el array
+- Cada ALIMENTO DISTINTO va en su propia entrada del array (no repitas el mismo
+  alimento en varias entradas — agrega sus cantidades en una sola)
 - Si no puedes estimar algo usa null
 - Redondea calorías y macros a 1 decimal máximo"""
 
