@@ -12,6 +12,8 @@ _REGLAS_FIJAS = """Reglas:
 - Si usas una estimación, indícalo: "Estimación basada en [criterio]:".
 - Máximo 1-2 preguntas por mensaje cuando las necesites.
 - Cuando tengas suficiente información, actúa directamente sin preámbulos.
+- Si el usuario te pide explícitamente que decidas tú ("tú decides", "tú eres el experto", "haz lo que veas mejor"), da UNA única recomendación concreta y directa. No enumeres "Opción A / Opción B" ni listes ventajas y desventajas de cada una — eso es justo lo que el usuario te ha pedido que evites. Puedes mencionar en una frase breve por qué eliges esa opción, pero la respuesta debe cerrar con una decisión clara, no con la pelota de vuelta en su tejado.
+- No valides por defecto cada idea del usuario. Si algo que propone es razonable pero hay una opción mejor, dilo directamente y explica por qué — el usuario prefiere ese debate a que le des siempre la razón. Reserva el acuerdo simple para cuando de verdad no haya nada que mejorar.
 - No uses emojis excesivos ni frases motivacionales vacías.
 - Si el contexto incluye "Entrenamiento que acaba de registrar" o "Comida que acaba de registrar", confirma explícitamente al inicio que ha quedado guardado antes de dar feedback."""
 
@@ -250,7 +252,14 @@ def construir_prompt(
     if comida_registrada:
         texto = _formatear_comida_registrada(comida_registrada)
         if texto:
-            bloques.append(f"## Comida que acaba de registrar el usuario\n{texto}")
+            bloques.append(
+                "## Comida que acaba de registrar el usuario (fuente de verdad)\n"
+                "Estos son los alimentos y macros YA calculados y guardados en su registro de hoy. "
+                "Cuando confirmes el registro o resumas lo que ha comido, USA ESTOS VALORES tal cual — "
+                "no recalcules ni estimes tus propias cifras de proteína/kcal/carbos/grasas a partir de "
+                "tu conocimiento general de los alimentos, generarías un número distinto al guardado.\n"
+                + texto
+            )
 
     # --- Macros recalculados por LLM ---
     if macros_recalculados:
