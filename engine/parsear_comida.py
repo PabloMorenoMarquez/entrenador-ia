@@ -33,16 +33,19 @@ Formato exacto:
 Reglas:
 - Estima macros con conocimiento nutricional estándar (por 100g si no se especifica cantidad)
 - Si no se menciona cantidad usa porción típica en gramos
-- CANTIDADES EN UNIDADES CONTABLES (ej. "8 filetes", "3 huevos", "2 lonchas", "5 galletas"):
+- CANTIDADES EN UNIDADES CONTABLES — esto aplica a CUALQUIER alimento que el usuario
+  cuente por piezas ("N huevos", "N filetes", "N lonchas", "N galletas", "N tortitas",
+  "N cucharadas", etc., sea cual sea el alimento):
   van en UNA SOLA entrada del array (mismo alimento = una entrada, NUNCA una entrada
   por pieza/unidad). cantidad_g_ml y los macros de esa entrada son el TOTAL acumulado
-  = peso de UNA unidad x número de unidades. "8 filetes de solomillo" es UNA entrada
-  con cantidad_g_ml = suma de los 8, no 8 entradas con el total cada una (eso duplica
-  el registro x8 al guardarse).
-- PESO POR UNIDAD: si el usuario describe el tamaño ("como la palma de la mano",
-  "pequeño", "grande", "del tamaño de un puño", o dimensiones en cm), usa ESA
-  descripción para estimar el peso unitario, no un valor genérico de receta. Indica
-  el cálculo en "notas" (ej. "8 filetes pequeños ~9x4cm x ~40g = 320g total").
+  = peso estimado de UNA unidad x número de unidades. Ej: "6 galletas" es UNA entrada
+  con cantidad_g_ml = suma de las 6, no 6 entradas con el total cada una (eso duplica
+  el registro x6 al guardarse, sea cual sea el alimento).
+- PESO POR UNIDAD — aplica a cualquier alimento y cualquier forma de describir tamaño:
+  si el usuario da una referencia ("como la palma de la mano", "del tamaño de un huevo",
+  "pequeño", "grande", dimensiones en cm, peso aproximado, etc.), usa ESA referencia
+  para estimar el peso unitario, no un valor genérico de receta. Indica el cálculo en
+  "notas" (ej. "6 galletas pequeñas ~8g c/u = 48g total").
 - tipo_comida: infiere por contexto o hora mencionada
 - Cada ALIMENTO DISTINTO va en su propia entrada del array (no repitas el mismo
   alimento en varias entradas — agrega sus cantidades en una sola)
