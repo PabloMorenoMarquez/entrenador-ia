@@ -564,6 +564,9 @@ def guardar_comidas_sb(datos: dict) -> int:
         "grasas_g": al.get("grasas_g") or None,
         "fibra_g": al.get("fibra_g") or None,
         "notas": al.get("notas") or notas_comida,
+        "fuente_datos": al.get("fuente_datos") or "estimado",
+        "alimento_ref_id": al.get("alimento_ref_id"),
+        "estimado": al.get("estimado") if al.get("estimado") is not None else True,
     } for al in alimentos]
     if rows:
         sb.table("registro_comidas").insert(rows).execute()
@@ -584,6 +587,18 @@ def leer_comidas_fecha_sb(fecha: str) -> list[dict]:
     return result.data or []
 
 
+def actualizar_comida_sb(id_comida: str, campos: dict) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("registro_comidas").update(campos).eq("id", id_comida).eq("user_id", uid).execute()
+
+
+def eliminar_comida_sb(id_comida: str) -> None:
+    sb = get_client()
+    uid = get_user_id()
+    sb.table("registro_comidas").delete().eq("id", id_comida).eq("user_id", uid).execute()
+
+
 def leer_comidas_rango_sb(desde: str, hasta: str) -> list[dict]:
     sb = get_client()
     uid = get_user_id()
@@ -597,6 +612,41 @@ def leer_comidas_rango_sb(desde: str, hasta: str) -> list[dict]:
         .execute()
     )
     return result.data or []
+
+
+# ─────────────────────────────────────────
+# ALIMENTOS REFERENCIA (lookup determinista de macros/100g)
+# ─────────────────────────────────────────
+
+def buscar_alimento_ref_sb(nombre_norm: str) -> dict | None:
+    sb = get_client()
+    result = (
+        sb.table("alimentos_referencia")
+        .select("*")
+        .eq("nombre_norm", nombre_norm)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return result.data[0]
+    result = (
+        sb.table("alimentos_referencia")
+        .select("*")
+        .contains("aliases", [nombre_norm])
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def crear_alimento_ref_sb(datos: dict) -> dict | None:
+    sb = get_client()
+    try:
+        result = sb.table("alimentos_referencia").insert(datos).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"[repositorio] Error cacheando alimento_referencia: {e}")
+        return None
 
 
 # ─────────────────────────────────────────
