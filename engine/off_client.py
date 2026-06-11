@@ -7,6 +7,7 @@ import requests
 
 OFF_URL = "https://world.openfoodfacts.org/cgi/search.pl"
 TIMEOUT = 1.5
+HEADERS = {"User-Agent": "EntrenadorIA/1.0 (entrenador-ia@example.com)"}
 
 
 def buscar_off(nombre: str) -> dict | None:
@@ -26,6 +27,7 @@ def buscar_off(nombre: str) -> dict | None:
                 "page_size": 5,
                 "fields": "product_name,code,nutriments",
             },
+            headers=HEADERS,
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
