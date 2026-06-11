@@ -20,6 +20,10 @@ export const postRutinaPlanDia = (dia_semana, ejercicios) =>
   apiFetch('/api/rutina/plan', { method: 'POST', body: JSON.stringify({ dia_semana, ejercicios }) })
 export const getNutricionHoy = () => apiFetch('/api/nutricion/hoy')
 export const getNutricionSemana = () => apiFetch('/api/nutricion/semana')
+export const putNutricionComida = (id, campos) =>
+  apiFetch(`/api/nutricion/comida/${id}`, { method: 'PUT', body: JSON.stringify(campos) })
+export const deleteNutricionComida = (id) =>
+  apiFetch(`/api/nutricion/comida/${id}`, { method: 'DELETE' })
 export const getHistorial = () => apiFetch('/api/historial')
 export const postChat = (mensaje, chat_id) => apiFetch('/chat', { method: 'POST', body: JSON.stringify({ mensaje, chat_id }) })
 export const getChatHistorial = (limite = 30, chat_id) =>

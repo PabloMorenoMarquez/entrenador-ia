@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getNutricionHoy, getNutricionSemana, getNutricionTiming } from '../api/client'
+import { getNutricionHoy, getNutricionSemana, getNutricionTiming, putNutricionComida, deleteNutricionComida } from '../api/client'
 import Card from '../components/Card'
 import Loading from '../components/Loading'
 import ErrorState from '../components/ErrorState'
@@ -135,6 +135,113 @@ function TomaPlan({ toma }) {
           <div className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{toma.kcal} kcal</div>
           <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
             P{toma.proteinas_g} C{toma.carbos_g} G{toma.grasas_g}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function formatMacro(valor, estimado) {
+  if (valor === null || valor === undefined) return 0
+  return estimado ? Math.round(valor) : valor
+}
+
+const inputStyle = {
+  background: 'var(--bg-card-raised)', border: '1px solid var(--border-strong)',
+  color: 'var(--text)', borderRadius: 'var(--r-sm)', padding: '5px 8px',
+  fontSize: '0.82rem', fontFamily: 'inherit',
+}
+
+const btnStyle = {
+  background: 'none', border: '1px solid var(--border-strong)',
+  color: 'var(--text-dim)', borderRadius: 'var(--r-sm)', padding: '3px 9px',
+  fontSize: '0.7rem', fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+  letterSpacing: '0.05em', cursor: 'pointer',
+}
+
+function ComidaCard({ c, onUpdated }) {
+  const [editing, setEditing] = useState(false)
+  const [alimento, setAlimento] = useState(c.alimento)
+  const [cantidad, setCantidad] = useState(c.cantidad_g_ml || '')
+  const [tipo, setTipo] = useState(c.tipo_comida)
+  const [saving, setSaving] = useState(false)
+
+  const estimado = c.estimado !== false
+  const badge = c.fuente_datos === 'verificado'
+    ? { label: '✓ verificado', color: 'var(--accent)' }
+    : c.fuente_datos === 'usuario'
+      ? { label: '✓ tú lo confirmaste', color: 'var(--accent)' }
+      : { label: '~ estimado', color: 'var(--text-dim)' }
+
+  const guardar = async () => {
+    setSaving(true)
+    try {
+      const nuevoHoy = await putNutricionComida(c.id, {
+        alimento,
+        cantidad_g_ml: cantidad === '' ? null : Number(cantidad),
+        tipo_comida: tipo,
+      })
+      setEditing(false)
+      onUpdated(nuevoHoy)
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const borrar = async () => {
+    if (!window.confirm(`¿Borrar "${c.alimento}" del registro de hoy?`)) return
+    try {
+      const nuevoHoy = await deleteNutricionComida(c.id)
+      onUpdated(nuevoHoy)
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
+  if (editing) {
+    return (
+      <Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input value={alimento} onChange={e => setAlimento(e.target.value)} placeholder="Alimento" style={inputStyle} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={cantidad} onChange={e => setCantidad(e.target.value)} type="number" placeholder="Cantidad (g/ml)" style={{ ...inputStyle, flex: 1 }} />
+            <input value={tipo} onChange={e => setTipo(e.target.value)} placeholder="Tipo de comida" style={{ ...inputStyle, flex: 1 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button onClick={() => setEditing(false)} style={btnStyle}>Cancelar</button>
+            <button onClick={guardar} disabled={saving} style={{ ...btnStyle, color: 'var(--accent)', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{c.alimento}</div>
+          <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 2 }}>
+            {c.hora} · {c.tipo_comida}
+            {c.cantidad_g_ml > 0 && ` · ${c.cantidad_g_ml}g`}
+          </div>
+          <div style={{ fontSize: '0.7rem', marginTop: 4, color: badge.color }}>{badge.label}</div>
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+            {estimado ? '~' : ''}{formatMacro(c.calorias, estimado)} kcal
+          </div>
+          <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+            P{formatMacro(c.proteinas_g, estimado)} C{formatMacro(c.carbos_g, estimado)} G{formatMacro(c.grasas_g, estimado)}
+          </div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6 }}>
+            <button onClick={() => setEditing(true)} style={btnStyle}>Editar</button>
+            <button onClick={borrar} style={{ ...btnStyle, color: 'var(--data-bad)' }}>Borrar</button>
           </div>
         </div>
       </div>
@@ -279,23 +386,7 @@ export default function Nutricion() {
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {comidas.map((c, i) => (
-              <Card key={i}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{c.alimento}</div>
-                    <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: 2 }}>
-                      {c.hora} · {c.tipo_comida}
-                      {c.cantidad_g_ml > 0 && ` · ${c.cantidad_g_ml}g`}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.calorias} kcal</div>
-                    <div className="num" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                      P{c.proteinas_g} C{c.carbos_g} G{c.grasas_g}
-                    </div>
-                  </div>
-                </div>
-              </Card>
+              <ComidaCard key={c.id || i} c={c} onUpdated={setHoy} />
             ))}
           </div>
         </div>
