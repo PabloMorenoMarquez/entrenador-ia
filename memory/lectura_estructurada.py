@@ -210,6 +210,7 @@ def _leer_comidas_sync(desde: str = None, hasta: str = None) -> list[dict]:
             rows = leer_comidas_fecha_sb(desde or _date.today().isoformat())
         if rows is not None:
             return [{
+                "ID": r.get("id", ""),
                 "FECHA": r.get("fecha", ""),
                 "HORA": str(r.get("hora") or ""),
                 "TIPO_COMIDA": r.get("tipo_comida", ""),
@@ -221,6 +222,8 @@ def _leer_comidas_sync(desde: str = None, hasta: str = None) -> list[dict]:
                 "GRASAS_G": r.get("grasas_g") or 0,
                 "FIBRA_G": r.get("fibra_g") or 0,
                 "NOTAS": r.get("notas", ""),
+                "FUENTE_DATOS": r.get("fuente_datos", "estimado"),
+                "ESTIMADO": r.get("estimado", True),
             } for r in rows]
     except Exception as e:
         print(f"[lectura] Comidas Supabase no disponible: {e}")
@@ -235,6 +238,7 @@ def _leer_nutricion_hoy_sync(objetivo: dict) -> dict:
     consumido = _sumar_macros(de_hoy)
     comidas = [
         {
+            "id": f.get("ID", ""),
             "hora": f.get("HORA", ""),
             "tipo_comida": f.get("TIPO_COMIDA", ""),
             "alimento": f.get("ALIMENTO", ""),
@@ -245,6 +249,8 @@ def _leer_nutricion_hoy_sync(objetivo: dict) -> dict:
             "grasas_g": _to_num(f.get("GRASAS_G")),
             "fibra_g": _to_num(f.get("FIBRA_G")),
             "notas": f.get("NOTAS", ""),
+            "fuente_datos": f.get("FUENTE_DATOS", "estimado"),
+            "estimado": f.get("ESTIMADO", True),
         }
         for f in de_hoy
     ]

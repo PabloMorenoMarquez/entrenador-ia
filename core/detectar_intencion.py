@@ -22,7 +22,7 @@ PROMPT_SISTEMA = """Clasifica el mensaje del usuario y responde SOLO con un JSON
 
 Formato exacto:
 {
-  "tipo": "entrenamiento|nutricion|registro_entreno|registro_comida|recalcular_macros|editar_rutina|general",
+  "tipo": "entrenamiento|nutricion|registro_entreno|registro_comida|correccion_registro|recalcular_macros|editar_rutina|general",
   "sheets_necesarias": ["array con nombres de sheets"],
   "necesita_motor": true o false,
   "necesita_rag": true o false
@@ -34,7 +34,8 @@ Reglas de clasificación:
 - entrenamiento: preguntas sobre ejercicios, progresión, fatiga, plan, series, repeticiones → motor: true, rag: true, sheets: [perfil_usuario, plan_semanal, dias_tipicos, objetivos, memory]
 - nutricion: preguntas sobre comida, macros, calorías, dieta, suplementos → motor: false, rag: true, sheets: [perfil_usuario, objetivos, alimentos_disponibles, memory]
 - registro_entreno: el usuario registra lo que ha entrenado → motor: true, rag: false, sheets: [perfil_usuario, plan_semanal, memory]
-- registro_comida: el usuario registra lo que ha comido → motor: false, rag: false, sheets: [perfil_usuario, objetivos, alimentos_disponibles]
+- registro_comida: el usuario registra lo que ha comido (alta nueva) → motor: false, rag: false, sheets: [perfil_usuario, objetivos, alimentos_disponibles]
+- correccion_registro: el usuario corrige/cambia un dato de una comida que YA registró hoy (ej: "no eran 150g sino 200g", "corrige el pollo de antes, era pechuga no muslo", "esa comida era la cena no el almuerzo") — NO es un alimento nuevo, es una corrección de algo ya guardado → motor: false, rag: false, sheets: [perfil_usuario, objetivos, memory]
 - recalcular_macros: el usuario pide recalcular sus macros objetivo, ajustar calorías, cambiar objetivos nutricionales → motor: false, rag: false, sheets: [perfil_usuario, objetivos, memory]
 - editar_rutina: el usuario pide explícitamente CAMBIAR/AÑADIR/QUITAR un ejercicio o vaciar un día de su plan semanal guardado (ej: "cambia las sentadillas del lunes por prensa", "añade curl de bíceps al jueves", "quita el cardio del martes") → motor: false, rag: false, sheets: [perfil_usuario, plan_semanal, memory]
 - general: saludos, preguntas generales, conversación → motor: false, rag: false, sheets: [perfil_usuario, memory]

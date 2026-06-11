@@ -13,6 +13,7 @@ Flujo:
 """
 
 import asyncio
+from datetime import date
 
 from core.llm import llamar_llm, MODELOS_PRINCIPAL
 from core.detectar_intencion import detectar_intencion
@@ -35,7 +36,10 @@ from memory.conectar_sheets import (
 from engine.analizar_entrenamiento import analizar_entrenamiento
 from engine.parsear_entreno import parsear_entreno
 from engine.parsear_comida import parsear_comida
+from engine.parsear_correccion import parsear_correccion
 from engine.parsear_edicion_rutina import parsear_edicion_rutina
+from engine.lookup_alimentos import resolver_alimento, normalizar
+from db.repositorio import leer_comidas_fecha_sb, actualizar_comida_sb
 from rag.buscar_contexto import buscar_contexto
 
 
@@ -169,6 +173,7 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
     # sheets + conversaciones + parse entreno/comida (si aplica) al mismo tiempo
     es_registro_entreno = intencion.get("tipo") == "registro_entreno"
     es_registro_comida  = intencion.get("tipo") == "registro_comida"
+    es_correccion_registro = intencion.get("tipo") == "correccion_registro"
     es_recalcular_macros = intencion.get("tipo") == "recalcular_macros"
     es_editar_rutina = intencion.get("tipo") == "editar_rutina"
 
@@ -184,6 +189,8 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
         tasks_lectura.append(parsear_entreno(mensaje))           # idx 6
     elif es_registro_comida:
         tasks_lectura.append(parsear_comida(mensaje))            # idx 6
+    elif es_correccion_registro:
+        tasks_lectura.append(parsear_correccion(mensaje))        # idx 6
     elif es_editar_rutina:
         tasks_lectura.append(parsear_edicion_rutina(mensaje))    # idx 6
 
@@ -200,7 +207,7 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
     plan_nutricional = resultados_lectura[4] if not isinstance(resultados_lectura[4], Exception) else None
     rutina_plan = resultados_lectura[5] if not isinstance(resultados_lectura[5], Exception) else None
 
-    datos_parse_raw = resultados_lectura[6] if (es_registro_entreno or es_registro_comida or es_editar_rutina) else None
+    datos_parse_raw = resultados_lectura[6] if (es_registro_entreno or es_registro_comida or es_correccion_registro or es_editar_rutina) else None
     if isinstance(datos_parse_raw, Exception):
         print(f"[pipeline] Error parseando registro: {datos_parse_raw}")
         datos_parse_raw = None
@@ -208,9 +215,10 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
     if es_registro_entreno and not datos_parse_raw:
         print(f"[pipeline] registro_entreno detectado pero el parser no devolvió datos (mensaje de {len(mensaje)} chars)")
 
-    datos_entreno_raw  = datos_parse_raw if es_registro_entreno else None
-    datos_comida_raw   = datos_parse_raw if es_registro_comida  else None
-    datos_edicion_raw  = datos_parse_raw if es_editar_rutina    else None
+    datos_entreno_raw    = datos_parse_raw if es_registro_entreno    else None
+    datos_comida_raw     = datos_parse_raw if es_registro_comida     else None
+    datos_correccion_raw = datos_parse_raw if es_correccion_registro else None
+    datos_edicion_raw    = datos_parse_raw if es_editar_rutina       else None
 
     # 2.5 Guardar registro si fue parseado correctamente
     entreno_registrado = None
@@ -225,12 +233,75 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
             print(f"[pipeline] Error guardando entreno: {e}")
 
     if datos_comida_raw:
+        for alimento in datos_comida_raw.get("alimentos") or []:
+            resolucion = await asyncio.to_thread(
+                resolver_alimento, alimento.get("alimento") or "", alimento.get("cantidad_g_ml")
+            )
+            if resolucion["fuente_datos"] == "verificado":
+                alimento.update({
+                    "calorias": resolucion["calorias"],
+                    "proteinas_g": resolucion["proteinas_g"],
+                    "carbos_g": resolucion["carbos_g"],
+                    "grasas_g": resolucion["grasas_g"],
+                    "fibra_g": resolucion["fibra_g"],
+                })
+            alimento["fuente_datos"] = resolucion["fuente_datos"]
+            alimento["estimado"] = resolucion["estimado"]
+            alimento["alimento_ref_id"] = resolucion["alimento_ref_id"]
+
         try:
             filas = await guardar_comida(datos_comida_raw)
             comida_registrada = {**datos_comida_raw, "filas_guardadas": filas}
             print(f"[pipeline] Comida guardada: {filas} alimento(s)")
         except Exception as e:
             print(f"[pipeline] Error guardando comida: {e}")
+
+    # 2.55 Aplicar corrección sobre una comida ya registrada hoy (UPDATE, no INSERT)
+    comida_corregida = None
+    intento_correccion_registro = es_correccion_registro
+    if datos_correccion_raw and datos_correccion_raw.get("alimento_objetivo"):
+        try:
+            objetivo_norm = normalizar(datos_correccion_raw["alimento_objetivo"])
+            comidas_hoy = leer_comidas_fecha_sb(date.today().strftime("%Y-%m-%d"))
+            fila = next(
+                (c for c in reversed(comidas_hoy) if (
+                    lambda n: n == objetivo_norm or objetivo_norm in n or n in objetivo_norm
+                )(normalizar(c.get("alimento") or ""))),
+                None,
+            )
+            if fila:
+                campos = {}
+                if datos_correccion_raw.get("alimento_nuevo"):
+                    campos["alimento"] = datos_correccion_raw["alimento_nuevo"]
+                if datos_correccion_raw.get("cantidad_g_ml_nueva"):
+                    campos["cantidad_g_ml"] = datos_correccion_raw["cantidad_g_ml_nueva"]
+                if datos_correccion_raw.get("tipo_comida_nueva"):
+                    campos["tipo_comida"] = datos_correccion_raw["tipo_comida_nueva"]
+
+                if "alimento" in campos or "cantidad_g_ml" in campos:
+                    nuevo_nombre = campos.get("alimento", fila["alimento"])
+                    nueva_cantidad = campos.get("cantidad_g_ml", fila.get("cantidad_g_ml"))
+                    resolucion = await asyncio.to_thread(resolver_alimento, nuevo_nombre, nueva_cantidad)
+                    if resolucion["fuente_datos"] == "verificado":
+                        campos.update({
+                            "calorias": resolucion["calorias"],
+                            "proteinas_g": resolucion["proteinas_g"],
+                            "carbos_g": resolucion["carbos_g"],
+                            "grasas_g": resolucion["grasas_g"],
+                            "fibra_g": resolucion["fibra_g"],
+                        })
+                    campos["alimento_ref_id"] = resolucion["alimento_ref_id"]
+
+                campos["fuente_datos"] = "usuario"
+                campos["estimado"] = False
+                actualizar_comida_sb(fila["id"], campos)
+                comida_corregida = {"antes": fila, "despues": {**fila, **campos}}
+                intento_correccion_registro = False
+                print(f"[pipeline] Comida corregida: {fila['alimento']} -> {campos}")
+            else:
+                print(f"[pipeline] Corrección: no se encontró comida de hoy que coincida con '{datos_correccion_raw['alimento_objetivo']}'")
+        except Exception as e:
+            print(f"[pipeline] Error corrigiendo comida: {e}")
 
     rutina_editada = None
     if datos_edicion_raw and rutina_plan:
@@ -306,6 +377,8 @@ async def procesar_mensaje(mensaje: str, chat_id: str) -> str:
         entreno_registrado=entreno_registrado,
         intento_registro_entreno=es_registro_entreno,
         comida_registrada=comida_registrada,
+        comida_corregida=comida_corregida,
+        intento_correccion_registro=intento_correccion_registro,
         macros_recalculados=macros_recalculados,
         recuperacion=recuperacion,
         plan_nutricional=plan_nutricional,

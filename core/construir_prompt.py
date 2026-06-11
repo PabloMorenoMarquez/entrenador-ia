@@ -176,6 +176,8 @@ def construir_prompt(
     entreno_registrado: Optional[dict] = None,
     intento_registro_entreno: bool = False,
     comida_registrada: Optional[dict] = None,
+    comida_corregida: Optional[dict] = None,
+    intento_correccion_registro: bool = False,
     macros_recalculados: Optional[dict] = None,
     recuperacion: Optional[dict] = None,
     plan_nutricional: Optional[dict] = None,
@@ -275,9 +277,34 @@ def construir_prompt(
                 "Estos son los alimentos y macros YA calculados y guardados en su registro de hoy. "
                 "Cuando confirmes el registro o resumas lo que ha comido, USA ESTOS VALORES tal cual — "
                 "no recalcules ni estimes tus propias cifras de proteína/kcal/carbos/grasas a partir de "
-                "tu conocimiento general de los alimentos, generarías un número distinto al guardado.\n"
+                "tu conocimiento general de los alimentos, generarías un número distinto al guardado. "
+                "Excepción: si el usuario corrige un dato (cantidad, alimento o macro) en este o "
+                "próximos mensajes, su corrección es autorizada — confirma el cambio y deja que el "
+                "sistema actualice el registro; no inventes tú los valores nuevos.\n"
                 + texto
             )
+
+    # --- Corrección de registro de comida (correccion_registro) ---
+    if comida_corregida:
+        texto_correccion = _formatear_correccion_comida(comida_corregida)
+        if texto_correccion:
+            bloques.append(
+                "## Corrección de registro de comida aplicada (fuente de verdad)\n"
+                "El usuario ha corregido un alimento de su registro de hoy y el sistema YA ha "
+                "actualizado esa fila en la base de datos (no se ha duplicado, es la misma entrada "
+                "con los valores nuevos). Confirma explícitamente el cambio usando estos valores "
+                "tal cual.\n"
+                + texto_correccion
+            )
+    elif intento_correccion_registro:
+        bloques.append(
+            "## Aviso: corrección de registro NO aplicada\n"
+            "El usuario ha pedido corregir una comida registrada hoy, pero el sistema no ha podido "
+            "identificar con seguridad a qué alimento de su registro de hoy se refiere (o no hay "
+            "ningún registro de hoy que coincida). NO digas que se ha corregido — eso sería falso. "
+            "Pídele que indique el nombre exacto del alimento tal y como lo registró y el nuevo "
+            "valor.\n"
+        )
 
     # --- Macros recalculados por LLM ---
     if macros_recalculados:
@@ -446,32 +473,44 @@ def _formatear_comida_registrada(datos: dict) -> str:
         partes.append(f"Tipo: {comida['tipo_comida']}")
     alimentos = datos.get("alimentos") or []
     for al in alimentos:
-        nombre = al.get("alimento", "")
-        cantidad = al.get("cantidad_g_ml")
-        kcal = al.get("calorias")
-        prot = al.get("proteinas_g")
-        carbos = al.get("carbos_g")
-        grasas = al.get("grasas_g")
-        linea = nombre
-        if cantidad:
-            linea += f" {cantidad}g"
-        macros = []
-        if kcal:
-            macros.append(f"{kcal}kcal")
-        if prot:
-            macros.append(f"P{prot}g")
-        if carbos:
-            macros.append(f"C{carbos}g")
-        if grasas:
-            macros.append(f"G{grasas}g")
-        if macros:
-            linea += f" ({', '.join(macros)})"
+        linea = _formatear_linea_comida(al)
         if linea:
             partes.append(f"- {linea}")
     filas_guardadas = datos.get("filas_guardadas")
     if filas_guardadas:
         partes.append(f"Guardado: {filas_guardadas} alimento(s) en registro_comidas")
     return "\n".join(partes)
+
+
+def _formatear_linea_comida(al: dict) -> str:
+    nombre = al.get("alimento", "")
+    cantidad = al.get("cantidad_g_ml")
+    kcal = al.get("calorias")
+    prot = al.get("proteinas_g")
+    carbos = al.get("carbos_g")
+    grasas = al.get("grasas_g")
+    linea = nombre
+    if cantidad:
+        linea += f" {cantidad}g"
+    macros = []
+    if kcal:
+        macros.append(f"{kcal}kcal")
+    if prot:
+        macros.append(f"P{prot}g")
+    if carbos:
+        macros.append(f"C{carbos}g")
+    if grasas:
+        macros.append(f"G{grasas}g")
+    if macros:
+        linea += f" ({', '.join(macros)})"
+    return linea
+
+
+def _formatear_correccion_comida(datos: dict) -> str:
+    """Formatea el antes/después de una corrección de comida ya guardada."""
+    antes = datos.get("antes") or {}
+    despues = datos.get("despues") or {}
+    return f"Antes: {_formatear_linea_comida(antes)}\nAhora: {_formatear_linea_comida(despues)}"
 
 
 _DIAS_LABEL = {

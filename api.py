@@ -37,6 +37,12 @@ class PerfilUpdateRequest(BaseModel):
     campos: dict
 
 
+class ComidaUpdate(BaseModel):
+    alimento: Optional[str] = None
+    cantidad_g_ml: Optional[float] = None
+    tipo_comida: Optional[str] = None
+
+
 # ---- Modelos Fase 1: recuperación y biométricos ----
 
 class BiometricosRequest(BaseModel):
@@ -224,6 +230,61 @@ async def get_nutricion_semana():
     try:
         from memory.lectura_estructurada import leer_nutricion_semana
         return await leer_nutricion_semana()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/nutricion/comida/{comida_id}")
+async def put_nutricion_comida(comida_id: str, request: ComidaUpdate):
+    try:
+        from datetime import date
+        from db.repositorio import actualizar_comida_sb, leer_comidas_fecha_sb
+        from engine.lookup_alimentos import resolver_alimento
+        from memory.lectura_estructurada import leer_nutricion_hoy
+
+        campos = {}
+        if request.tipo_comida is not None:
+            campos["tipo_comida"] = request.tipo_comida
+        if request.alimento is not None:
+            campos["alimento"] = request.alimento
+        if request.cantidad_g_ml is not None:
+            campos["cantidad_g_ml"] = request.cantidad_g_ml
+
+        if "alimento" in campos or "cantidad_g_ml" in campos:
+            comidas_hoy = leer_comidas_fecha_sb(date.today().isoformat())
+            actual = next((c for c in comidas_hoy if c.get("id") == comida_id), None)
+            if actual is None:
+                raise HTTPException(status_code=404, detail="Comida no encontrada en el registro de hoy")
+            nombre = campos.get("alimento", actual.get("alimento"))
+            cantidad = campos.get("cantidad_g_ml", actual.get("cantidad_g_ml"))
+            resolucion = await asyncio.to_thread(resolver_alimento, nombre, cantidad)
+            if resolucion["fuente_datos"] == "verificado":
+                campos.update({
+                    "calorias": resolucion["calorias"],
+                    "proteinas_g": resolucion["proteinas_g"],
+                    "carbos_g": resolucion["carbos_g"],
+                    "grasas_g": resolucion["grasas_g"],
+                    "fibra_g": resolucion["fibra_g"],
+                })
+            campos["alimento_ref_id"] = resolucion["alimento_ref_id"]
+
+        campos["fuente_datos"] = "usuario"
+        campos["estimado"] = False
+        actualizar_comida_sb(comida_id, campos)
+        return await leer_nutricion_hoy()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/nutricion/comida/{comida_id}")
+async def delete_nutricion_comida(comida_id: str):
+    try:
+        from db.repositorio import eliminar_comida_sb
+        from memory.lectura_estructurada import leer_nutricion_hoy
+        eliminar_comida_sb(comida_id)
+        return await leer_nutricion_hoy()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
