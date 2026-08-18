@@ -1,23 +1,23 @@
-# 🏋️ EntrenadorIA
+# EntrenadorIA
 
 > **Entrenador personal inteligente** que combina un motor determinista de análisis de entrenamiento, memoria persistente del usuario, RAG científico y un LLM para generar recomendaciones personalizadas y adaptativas.
 
 ---
 
-## 📌 ¿Qué es esto?
+## ¿Qué es esto?
 
 EntrenadorIA **no es un chatbot**. Es un sistema inteligente que actúa como coach personal de entrenamiento y nutrición, capaz de:
 
-- 🧠 Mantener **memoria persistente** del usuario (objetivos, historial, perfil físico)
-- 📊 **Analizar la progresión** real: volumen, RIR, fatiga, estancamiento, tendencias
-- 📚 Consultar **conocimiento científico** mediante RAG (libros de entrenamiento y nutrición)
-- 🤖 Usar un **LLM** para razonar y comunicar recomendaciones de forma natural
-- 🍎 Seguimiento de **nutrición y biométricos**
-- 💬 Funcionar como **asistente conversacional continuo**
+- Mantener **memoria persistente** del usuario (objetivos, historial, perfil físico)
+- **Analizar la progresión** real: volumen, RIR, fatiga, estancamiento, tendencias
+- Consultar **conocimiento científico** mediante RAG (libros de entrenamiento y nutrición)
+- Usar un **LLM** para razonar y comunicar recomendaciones de forma natural
+- Seguimiento de **nutrición y biométricos**
+- Funcionar como **asistente conversacional continuo**
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -73,7 +73,7 @@ EntrenadorIA **no es un chatbot**. Es un sistema inteligente que actúa como coa
 
 ---
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 | Capa | Tecnología |
 |---|---|
@@ -88,7 +88,7 @@ EntrenadorIA **no es un chatbot**. Es un sistema inteligente que actúa como coa
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 EntrenadorIA/
@@ -121,7 +121,7 @@ EntrenadorIA/
 
 ---
 
-## 🗄️ Modelo de Datos (Google Sheets)
+## Modelo de Datos (Google Sheets)
 
 El sistema utiliza un libro de Google Sheets como base de datos ligera con las siguientes hojas:
 
@@ -143,7 +143,7 @@ El sistema utiliza un libro de Google Sheets como base de datos ligera con las s
 
 ---
 
-## 🔌 Endpoints API
+## Endpoints API
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -162,7 +162,7 @@ El sistema utiliza un libro de Google Sheets como base de datos ligera con las s
 
 ---
 
-## 🧠 Cómo funciona el pipeline
+## Cómo funciona el pipeline
 
 ```
 Usuario envía mensaje
@@ -194,7 +194,7 @@ Respuesta al usuario
 
 ---
 
-## 🔄 Estado del Proyecto
+## Estado del Proyecto
 
 | Fase | Descripción | Estado |
 |---|---|---|
@@ -210,7 +210,7 @@ Respuesta al usuario
 
 ---
 
-## ⚙️ Configuración y Despliegue
+## Configuración y Despliegue
 
 ### 1. Clonar el repositorio
 
@@ -276,7 +276,7 @@ web: uvicorn api:app --host 0.0.0.0 --port $PORT
 
 ---
 
-## 📚 Ingestión de Conocimiento Científico (RAG)
+## Ingestión de Conocimiento Científico (RAG)
 
 Para añadir nuevos libros al sistema de RAG:
 
@@ -291,7 +291,7 @@ Esto generará los chunks, calculará los embeddings con OpenAI y los almacenar�
 
 ---
 
-## 🔐 Seguridad
+## Seguridad
 
 - El endpoint `/api/biometricos` acepta una `API_KEY` opcional (cabecera `X-API-Key`) para integraciones con smartwatch o apps Android.
 - Las credenciales de Google se pasan como JSON en una variable de entorno (nunca se sube el archivo `credentials.json`).
@@ -299,12 +299,12 @@ Esto generará los chunks, calculará los embeddings con OpenAI y los almacenar�
 
 ---
 
-## 🤝 Contribuciones
+## Contribuciones
 
 Este es un proyecto personal en desarrollo activo. Si tienes ideas, sugerencias o encuentras bugs, abre un issue o un PR.
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 MIT — libre de usar, modificar y distribuir.
